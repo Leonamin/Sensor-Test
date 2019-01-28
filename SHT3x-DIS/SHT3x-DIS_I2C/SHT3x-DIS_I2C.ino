@@ -28,7 +28,6 @@ int ReadTempHum() {
     uint8_t buf[6];
 
     WriteCommand(SHT31_MEAS_HIGHREP);
-    WriteCommand(SHT31_MEAS_HIGHREP);
 
     delay(20);          //대기
     Wire.requestFrom((uint8_t)SHT31_DEFAULT_ADDR, (uint8_t)6);
