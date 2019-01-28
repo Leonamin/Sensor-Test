@@ -1,5 +1,0 @@
-{
-    "board": "arduino:avr:megaADK",
-    "sketch": "ICM20948_I2C.ino",
-    "port": "/dev/ttyUSB0"
-}
