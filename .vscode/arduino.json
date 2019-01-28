@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:megaADK",
+    "port": "/dev/ttyUSB0",
+    "sketch": "SHT3x-DIS/SHT3x-DIS_I2C/SHT3x-DIS_I2C.ino"
+}
