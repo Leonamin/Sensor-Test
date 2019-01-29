@@ -178,13 +178,13 @@ int APDS9960_Write_reg(uint8_t reg, uint8_t *val) {
 /*  I2C  Combined 포맷 형식
     SA -> RA -> SA -> Data
 */
-int APDS9960_Read(uint8_t reg, uint8_t *buf, int size) {
+int APDS9960_Read(uint8_t reg, uint8_t &val, int size) {
     int i;
     Wire.beginTransmission(APDS9960_I2C_ADDRESS);
     Wire.write(reg);
     Wire.requestFrom(APDS9960_I2C_ADDRESS, size);
     while(Wire.available() && i < size){
-        buf[i++] = Wire.read();
+        val = Wire.read();
     }
     if (size != i) 
         return 0;
@@ -192,8 +192,289 @@ int APDS9960_Read(uint8_t reg, uint8_t *buf, int size) {
     return 1;
 }
 
-void APDS9960_Reset() {
+int APDS9960_setProxIntLowThresh(uint8_t threshold)
+{
+    if( !APDS9960_Write_reg(APDS9960_PILT, threshold) ) {
+        return 0;
+    }
     
+    return 1;
+}
+
+int APDS9960_setProxIntHighThresh(uint8_t threshold)
+{
+    if( !wireWriteDataByte(APDS9960_PIHT, threshold) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setLEDDrive(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_CONTROL, val, 1) ) {
+        return false;
+    }
+    
+    drive &= 0b00000011;
+    drive = drive << 6;
+    val &= 0b00111111;
+    val |= drive;
+    
+    if( !APDS9960_Write_reg(APDS9960_CONTROL, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setProximityGain(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_CONTROL, val, 1) ) {
+        return 0;
+    }
+    
+    drive &= 0b00000011;
+    drive = drive << 2;
+    val &= 0b11110011;
+    val |= drive;
+    
+    if( !wireWriteDataByte(APDS9960_CONTROL, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setAmbientLightGain(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !wireReadDataByte(APDS9960_CONTROL, val) ) {
+        return false;
+    }
+    
+    drive &= 0b00000011;
+    val &= 0b11111100;
+    val |= drive;
+    
+    if( !wireWriteDataByte(APDS9960_CONTROL, val) ) {
+        return false;
+    }
+    
+    return true;
+}
+
+int APDS9960_setLEDBoost(uint8_t boost)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_CONFIG2, val, 1) ) {
+        return false;
+    }
+    
+    boost &= 0b00000011;
+    boost = boost << 4;
+    val &= 0b11001111;
+    val |= boost;
+    
+    if( !APDS9960_Write_reg(APDS9960_CONFIG2, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}    
+
+int APDS9960_setProxGainCompEnable(uint8_t enable)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_CONFIG3, val, 1) ) {
+        return false;
+    }
+
+    enable &= 0b00000001;
+    enable = enable << 5;
+    val &= 0b11011111;
+    val |= enable;
+    
+    if( !APDS9960_Write_reg(APDS9960_CONFIG3, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setProxPhotoMask(uint8_t mask)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_CONFIG3, val, 1) ) {
+        return false;
+    }
+    
+    mask &= 0b00001111;
+    val &= 0b11110000;
+    val |= mask;
+    
+    if( !APDS9960_Write_reg(APDS9960_CONFIG3, val) ) {
+        return false;
+    }
+    
+    return true;
+}
+
+int APDS9960_setGestureEnterThresh(uint8_t threshold)
+{
+    if( !APDS9960_Write_reg(APDS9960_GPENTH, threshold) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setGestureExitThresh(uint8_t threshold)
+{
+    if( !APDS9960_Write_reg(APDS9960_GEXTH, threshold) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setGestureGain(uint8_t gain)
+{
+    uint8_t val;
+
+    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+        return 0;
+    }
+    
+    gain &= 0b00000011;
+    gain = gain << 5;
+    val &= 0b10011111;
+    val |= gain;
+    
+    if( !APDS9960_Write_reg(APDS9960_GCONF2, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setGestureLEDDrive(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+        return false;
+    }
+    
+    drive &= 0b00000011;
+    drive = drive << 3;
+    val &= 0b11100111;
+    val |= drive;
+    
+    if( !APDS9960_Write_reg(APDS9960_GCONF2, val) ) {
+        return false;
+    }
+    
+    return true;
+}
+
+int APDS9960_setGestureWaitTime(uint8_t time)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+        return 0;
+    }
+    
+    time &= 0b00000111;
+    val &= 0b11111000;
+    val |= time;
+    
+    if( !APDS9960_Write_reg(APDS9960_GCONF2, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setLightIntLowThreshold(uint16_t threshold)
+{
+    uint8_t val_low;
+    uint8_t val_high;
+    
+    val_low = threshold & 0x00FF;
+    val_high = (threshold & 0xFF00) >> 8;
+    
+    if( !APDS9960_Write_reg(APDS9960_AILTL, val_low) ) {
+        return false;
+    }
+    
+    if( !APDS9960_Write_reg(APDS9960_AILTH, val_high) ) {
+        return false;
+    }
+    
+    return true;
+}
+
+int APDS9960_setLightIntHighThreshold(uint16_t threshold)
+{
+    uint8_t val_low;
+    uint8_t val_high;
+    
+    val_low = threshold & 0x00FF;
+    val_high = (threshold & 0xFF00) >> 8;
+    
+    if( !APDS9960_Write_reg(APDS9960_AIHTL, val_low) ) {
+        return false;
+    }
+    
+    /* Write high byte */
+    if( !APDS9960_Write_reg(APDS9960_AIHTH, val_high) ) {
+        return false;
+    }
+    
+    return true;
+}
+
+int SparkFun_APDS9960_setProximityIntLowThreshold(uint8_t threshold)
+{
+    if( !wireWriteDataByte(APDS9960_PILT, threshold) ) {
+        return false;
+    }
+    
+    return true;
+}
+
+int APDS9960_Begin() {
+    //ID 확인
+    uint8_t id;
+    if(!read(APDS9960_ID, &id, 1))
+        return 0;
+    if (id != 0xAB)
+        return 0;
+    APDS9960_setMode(ALL, ON);
+    //ALS와 근접 센서에 대한 기본값 설정 
+    APDS9960_Write_reg(APDS9960_ATIME, DEFAULT_ATIME);
+
+    APDS9960_Write_reg(APDS9960_WTIME, DEFAULT_WTIME);
+
+    APDS9960_Write_reg(APDS9960_PPULSE, DEFAULT_PROX_PPULSE);
+
+    APDS9960_Write_reg(APDS9960_POFFSET_UR, DEFAULT_POFFSET_UR);
+    
+    APDS9960_Write_reg(APDS9960_POFFSET_DL, DEFAULT_POFFSET_DL);
+
+    APDS9960_Write_reg(APDS9960_CONFIG1, DEFAULT_CONFIG1);
+
+
 }
 
 void setup() {
@@ -203,9 +484,9 @@ void setup() {
     Wire.begin();
     Serial.println("I2C Connected");
 
-    APDS9960_Init();
+    APDS9960_Begin();
 }
 
 void loop() {
-
+    
 }
