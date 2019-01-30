@@ -1,6 +1,6 @@
 #include <Wire.h>
 
-#define MAX30101_I2C_ADDRESS        0xA7
+#define MAX30101_I2C_ADDRESS        0x57
 
 #define MAX30101_INTR_STATUS_1      0x00
 #define MAX30101_INTR_STATUS_2      0x01
@@ -40,8 +40,9 @@ int MAX30101_Read(uint8_t reg, uint8_t *buf, int size) {
     Wire.endTransmission();
     Wire.requestFrom(MAX30101_I2C_ADDRESS, size);
     
-    if (Wire.available() != size)
+    if (Wire.available() != size){          //여기서 오류 발생
         return 0;
+    }
     for(int i = 0; i < size; i++) {
         buf[i] = Wire.read();
     }
@@ -53,7 +54,7 @@ int MAX30101_Read_FIFO(uint32_t *red_led, uint32_t *ir_led) {
     uint8_t buf[6];
     *red_led = 0;
     *ir_led = 0;
-    if ( !MAX30101_Read(MAX30101_I2C_ADDRESS, buf, 6))
+    if ( !MAX30101_Read(MAX30101_FIFO_DATA, buf, 6))
         return 0;
     *red_led += buf[0] << 16;
     *red_led += buf[1] << 8;
