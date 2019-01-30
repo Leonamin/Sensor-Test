@@ -158,16 +158,14 @@ int APDS9960_Write(uint8_t reg, uint8_t cmd) {
 int APDS9960_Read(uint8_t reg, uint8_t *buf, int size) {
     int i, n;
     Wire.beginTransmission(APDS9960_I2C_ADDRESS);
-    n = Wire.write(reg);
-    if(n != 1) {
-        Serial.println("Fail write");
-        return 0;
-    }
+    Wire.write(reg);
+    Wire.endTransmission();
     Wire.requestFrom(APDS9960_I2C_ADDRESS, size);
+    
     while(Wire.available() && i < size) {
         buf[i++] = Wire.read();
     }
-    Serial.println(*buf);
+
     return 1;
 }
 
@@ -284,6 +282,7 @@ int APDS9960_Init() {
     //ID 확인
     uint8_t id;
     APDS9960_Read(APDS9960_ID, &id, 1);
+    Serial.print("APDS-9960 ID: \t");
     Serial.println(id);
     if(id != 0xAB) {
         return 0;
@@ -332,8 +331,8 @@ void loop(void) {
     if(!APDS9960_readAmbientLight(ambientlight)) {
         Serial.println("ERROR");
     } else {
-        Serial.print("Ambient:\t");
-        Serial.println(ambientlight);
+    //    Serial.print("Ambient:\t");
+    //    Serial.println(ambientlight);
     }
     delay(100);
 }
