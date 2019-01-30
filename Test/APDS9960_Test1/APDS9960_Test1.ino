@@ -290,6 +290,16 @@ int APDS9960_Init() {
     //ENABLE 레지스터 전부 켜기
     APDS9960_Write(APDS9960_ENABLE, 0x7F);      //MSB는 Reserved 비트
 
+    APDS9960_Write(APDS9960_ATIME, DEFAULT_ATIME);
+
+    APDS9960_Write(APDS9960_CONFIG1, DEFAULT_CONFIG1);
+
+    APDS9960_Write(APDS9960_CONFIG2, DEFAULT_CONFIG2);
+
+    APDS9960_Write(APDS9960_CONFIG3, DEFAULT_CONFIG3);
+
+    APDS9960_Write(APDS9960_CONTROL, 0x0F);
+
     return 1;
 }
 
@@ -302,7 +312,6 @@ int APDS9960_readAmbientLight(uint16_t &val)
         return 0;
     }
     val = val_byte;
-    
     /* Read value from clear channel, high byte register */
     if( !APDS9960_Read(APDS9960_CDATAH, val_byte, 1) ) {
         return 0;
@@ -331,8 +340,8 @@ void loop(void) {
     if(!APDS9960_readAmbientLight(ambientlight)) {
         Serial.println("ERROR");
     } else {
-    //    Serial.print("Ambient:\t");
-    //    Serial.println(ambientlight);
+        Serial.print("Ambient:\t");
+        Serial.println(ambientlight);
     }
     delay(100);
 }
