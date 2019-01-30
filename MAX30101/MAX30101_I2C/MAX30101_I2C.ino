@@ -90,6 +90,12 @@ void setup() {
     Serial.println("Serial Connected");
     Wire.begin();
     Serial.println("I2C Connected");
+    uint8_t id;
+    if (MAX30101_Read(MAX30101_PART_ID, id, 1) == false) {
+        Serial.println("Failed to check Device");
+        while(1){}
+    }
+    Serial.println("Succed to check Device");
 
     MAX30101_Init();
 }
