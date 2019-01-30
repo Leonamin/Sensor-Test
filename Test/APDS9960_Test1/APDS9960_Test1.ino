@@ -287,19 +287,28 @@ int APDS9960_Init() {
     if(id != 0xAB) {
         return 0;
     }
-    //ENABLE 레지스터 전부 켜기
-    APDS9960_Write(APDS9960_ENABLE, 0x7F);      //MSB는 Reserved 비트
-
-    APDS9960_Write(APDS9960_ATIME, DEFAULT_ATIME);
-
-    APDS9960_Write(APDS9960_CONFIG1, DEFAULT_CONFIG1);
-
-    APDS9960_Write(APDS9960_CONFIG2, DEFAULT_CONFIG2);
-
-    APDS9960_Write(APDS9960_CONFIG3, DEFAULT_CONFIG3);
-
-    APDS9960_Write(APDS9960_CONTROL, 0x0F);
-
+    //ENABLE 레지스터 전부 끄기
+    if(!APDS9960_Write(APDS9960_ENABLE, 0x00))      //MSB는 Reserved 비트
+        return 0;
+    if(!APDS9960_Write(APDS9960_ATIME, DEFAULT_ATIME))
+        return 0;
+    if(!APDS9960_Write(APDS9960_CONFIG1, DEFAULT_CONFIG1))
+        return 0;
+    if(!APDS9960_Write(APDS9960_CONFIG2, DEFAULT_CONFIG2))
+        return 0;
+    if(!APDS9960_Write(APDS9960_CONFIG3, DEFAULT_CONFIG3))
+        return 0;
+    if(!APDS9960_Write(APDS9960_CONTROL, 0xCF))     //LED Drive 12.5, P, A Gain 8x, AGAIN_16X
+        return 0;
+    if(!APDS9960_Write(APDS9960_AILTL, 0xFF))
+        return 0;
+    if(!APDS9960_Write(APDS9960_AILTH, 0xFF))
+        return 0;
+    if(!APDS9960_Write(APDS9960_AIHTL, 0x00))
+        return 0;
+    if(!APDS9960_Write(APDS9960_AIHTH, 0x00))
+        return 0;
+    
     return 1;
 }
 
@@ -307,16 +316,74 @@ int APDS9960_readAmbientLight(uint16_t &val)
 {
     uint8_t val_byte;
     val = 0;
-    
-    if( !APDS9960_Read(APDS9960_CDATAL, val_byte, 1) ) {
+
+    if( !APDS9960_Read(APDS9960_CDATAL, &val_byte, 1) ) {
         return 0;
     }
+
     val = val_byte;
-    /* Read value from clear channel, high byte register */
-    if( !APDS9960_Read(APDS9960_CDATAH, val_byte, 1) ) {
+
+    if( !APDS9960_Read(APDS9960_CDATAH, &val_byte, 1) ) {
         return 0;
     }
-    val = val + ((uint16_t)val_byte << 8);
+    val += ((uint16_t)val_byte << 8);
+    
+    return 1;
+}
+
+int APDS9960_readRedLight(uint16_t &val)
+{
+    uint8_t val_byte;
+    val = 0;
+
+    if( !APDS9960_Read(APDS9960_RDATAL, &val_byte, 1) ) {
+        return 0;
+    }
+    
+    val = val_byte;
+
+    if( !APDS9960_Read(APDS9960_RDATAH, &val_byte, 1) ) {
+        return 0;
+    }
+    val += ((uint16_t)val_byte << 8);
+    
+    return 1;
+}
+
+int APDS9960_readGreenLight(uint16_t &val)
+{
+    uint8_t val_byte;
+    val = 0;
+
+    if( !APDS9960_Read(APDS9960_GDATAL, &val_byte, 1) ) {
+        return 0;
+    }
+    
+    val = val_byte;
+
+    if( !APDS9960_Read(APDS9960_GDATAH, &val_byte, 1) ) {
+        return 0;
+    }
+    val += ((uint16_t)val_byte << 8);
+    
+    return 1;
+}
+
+int APDS9960_readBlueLight(uint16_t &val)
+{
+    uint8_t val_byte;
+    val = 0;
+
+    if( !APDS9960_Read(APDS9960_BDATAL, &val_byte, 1) ) {
+        return 0;
+    }
+    
+    val = val_byte;
+
+    if( !APDS9960_Read(APDS9960_BDATAH, &val_byte, 1) ) {
+        return 0;
+    }
+    val += ((uint16_t)val_byte << 8);
     
     return 1;
 }
@@ -336,12 +403,19 @@ void setup(void) {
 }
 
 void loop(void) {
-    uint16_t ambientlight;
-    if(!APDS9960_readAmbientLight(ambientlight)) {
+    uint16_t ambientlight, redlight,greenlight, bluelight;
+    if(!APDS9960_readAmbientLight(ambientlight) || !APDS9960_readRedLight(redlight) || 
+    !APDS9960_readBlueLight(bluelight) || !APDS9960_readGreenLight(greenlight)) {
         Serial.println("ERROR");
     } else {
         Serial.print("Ambient:\t");
         Serial.println(ambientlight);
+        Serial.print("Red:\t");
+        Serial.println(redlight);
+        Serial.print("Green:\t");
+        Serial.println(greenlight);
+        Serial.print("Blue:\t");
+        Serial.println(bluelight);
     }
-    delay(100);
+    delay(1000);
 }
