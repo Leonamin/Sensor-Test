@@ -1,5 +1,5 @@
 {
     "board": "arduino:avr:megaADK",
     "port": "/dev/ttyUSB0",
-    "sketch": "Test/APDS9960_Test1/APDS9960_Test1.ino"
+    "sketch": "APDS9960/APDS9960_Proximity/APDS9960_Proximity.ino"
 }
