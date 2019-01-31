@@ -221,26 +221,6 @@ int APDS9960_enablePower()
     return 1;
 }
 
-int APDS9960_setProximityGain(uint8_t drive)
-{
-    uint8_t val;
-    
-    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
-        return 0;
-    }
-    
-    drive &= 0b00000011;
-    drive = drive << 2;
-    val &= 0b11110011;
-    val |= drive;
-    
-    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
-        return 0;
-    }
-    
-    return 1;
-}
-
 int APDS9960_setLEDDrive(uint8_t drive)
 {
     uint8_t val;
@@ -259,50 +239,6 @@ int APDS9960_setLEDDrive(uint8_t drive)
     }
     
     return 1;
-}
-
-int APDS9960_setProximityIntEnable(uint8_t enable)
-{
-    uint8_t val;
-    
-    if( !APDS9960_Read(APDS9960_ENABLE, &val, 1) ) {
-        return 0;
-    }
-    
-    enable &= 0b00000001;
-    enable = enable << 5;
-    val &= 0b11011111;
-    val |= enable;
-    
-    if( !APDS9960_Write(APDS9960_ENABLE, val) ) {
-        return 0;
-    }
-    
-    return 1;
-}
-
-int APDS9960_enableProximity(int interrupt) {
-    if( !APDS9960_setProximityGain(PGAIN_1X) ) {
-        return 0;
-    }
-    if( !APDS9960_setLEDDrive(DEFAULT_LDRIVE) ) {
-        return 0;
-    }
-    if( interrupt ) {
-        if( !APDS9960_setProximityIntEnable(1) ) {
-            return 0;
-        }
-    } else {
-        if( !APDS9960_setProximityIntEnable(0) ) {
-            return 0;
-        }
-    }
-    if( !APDS9960_enablePower() ){
-        return 0;
-    }
-    if( !APDS9960_setMode(PROXIMITY, 1) ) {
-        return 0;
-    }
 }
 
 int APDS9960_Init() {
@@ -353,14 +289,18 @@ int APDS9960_Init() {
     return 1;
 }
 
-int APDS9960_readProximity(uint8_t &val)
-{
-    val = 0;
-    
-    if( !APDS9960_Read(APDS9960_PDATA, &val, 1) ) {
-        return 0;
-    }
-    
+int APDS9960_readGesture(uint8_t *gval) {
+    uint8_t val_byte;
+    APDS9960_Read(APDS9960_GFIFO_U, &val_byte, 1);
+    Serial.println(val_byte);
+    gval[0] = val_byte;
+    APDS9960_Read(APDS9960_GFIFO_D, &val_byte, 1);
+    gval[1] = val_byte;
+    APDS9960_Read(APDS9960_GFIFO_L, &val_byte, 1);
+    gval[2] = val_byte;
+    APDS9960_Read(APDS9960_GFIFO_R, &val_byte, 1);
+    gval[3] = val_byte;
+
     return 1;
 }
 
@@ -375,16 +315,22 @@ void setup(void) {
         while(1) {}
     }
     //RGB Ambient Light 허용
-    APDS9960_enableProximity(0);
+    APDS9960_setMode(APDS9960_ENABLE, GESTURE);
 }
 
 void loop(void) {
-    uint8_t pval;
-    if(!APDS9960_readProximity(pval)) {
+    uint8_t gval[4];
+    if(!APDS9960_readGesture(gval)) {
         Serial.println("ERROR");
     } else {
-        Serial.print("Proximity: ");
-        Serial.print(pval);
+        Serial.print("Gesture\n Up: ");
+        Serial.print(gval[0]);
+        Serial.print("\tDown: ");
+        Serial.print(gval[1]);
+        Serial.print("\tLeft: ");
+        Serial.print(gval[2]);
+        Serial.print("\tRight: ");
+        Serial.print(gval[3]);
         Serial.print("\t\n");
     }
     delay(100);
