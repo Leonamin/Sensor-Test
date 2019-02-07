@@ -1,5 +1,5 @@
 {
     "board": "arduino:avr:megaADK",
     "port": "/dev/ttyUSB0",
-    "sketch": "APDS9960/APDS9960_Gesture/APDS9960_Gesture.ino"
+    "sketch": "MAX30101/MAX30101_HR/MAX30101_HR.ino"
 }
