@@ -254,6 +254,46 @@ int APDS9960_setLEDDrive(uint8_t drive)
     return 1;
 }
 
+int APDS9960_setGestureGain(uint8_t gain)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+        return 0;
+    }
+    
+    gain &= 0b00000011;
+    gain = gain << 5;
+    val &= 0b10011111;
+    val |= gain;
+    
+    if( !APDS9960_Write(APDS9960_GCONF2, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setGestureLEDDrive(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+        return 0;
+    }
+    
+    drive &= 0b00000011;
+    drive = drive << 3;
+    val &= 0b11100111;
+    val |= drive;
+    
+    if( !APDS9960_Write(APDS9960_GCONF2, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
 int APDS9960_Init() {
 
     //ID 확인
@@ -299,6 +339,19 @@ int APDS9960_Init() {
     if(!APDS9960_Write(APDS9960_PIHT, 50))
         return 0;
 
+    //제스처 설정
+    if(!APDS9960_Write(APDS9960_GPENTH, DEFAULT_GPENTH))
+        return 0;
+    if(!APDS9960_Write(APDS9960_GEXTH, DEFAULT_GEXTH))
+        return 0;
+    if(!APDS9960_Write(APDS9960_GCONF1, DEFAULT_GCONF1))
+        return 0;
+    if(!APDS9960_setGestureGain(DEFAULT_GGAIN))
+        return 0;
+    if(!APDS9960_setGestureLEDDrive(DEFAULT_GLDRIVE) ) {
+        return false;
+    }
+
     return 1;
 }
 
@@ -313,9 +366,6 @@ int APDS9960_isGestureAvailable()
         #endif
         return ERROR;
     }
-    #ifdef DEBUG
-    Serial.println(val);
-    #endif
     
     val &= APDS9960_GVALID;
     
@@ -326,6 +376,71 @@ int APDS9960_isGestureAvailable()
     }
 }
 
+int APDS9960_setProximityGain(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
+        return 0;
+    }
+    
+    drive &= 0b00000011;
+    drive = drive << 2;
+    val &= 0b11110011;
+    val |= drive;
+    
+    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_setProximityIntEnable(uint8_t enable)
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_ENABLE, &val, 1) ) {
+        return 0;
+    }
+    
+    enable &= 0b00000001;
+    enable = enable << 5;
+    val &= 0b11011111;
+    val |= enable;
+    
+    if( !APDS9960_Write(APDS9960_ENABLE, val) ) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+int APDS9960_enableProximity(int interrupt) {
+    if( !APDS9960_setProximityGain(PGAIN_1X) ) {
+        return 0;
+    }
+    if( !APDS9960_setLEDDrive(DEFAULT_LDRIVE) ) {
+        return 0;
+    }
+    if( interrupt ) {
+        if( !APDS9960_setProximityIntEnable(1) ) {
+            return 0;
+        }
+    } else {
+        if( !APDS9960_setProximityIntEnable(0) ) {
+            return 0;
+        }
+    }
+    if( !APDS9960_enablePower() ){
+        return 0;
+    }
+    if( !APDS9960_setMode(PROXIMITY, 1) ) {
+        return 0;
+    }
+}
+
+
 int APDS9960_readGesture() {
     uint8_t fifo_level = 0;
     uint8_t byte_read = 0;
@@ -334,6 +449,9 @@ int APDS9960_readGesture() {
     int motion;
     
     if( !APDS9960_isGestureAvailable()) {
+#ifdef DEBUG
+        Serial.println("un available gesture");
+#endif
         return 0;
     }
 
@@ -357,7 +475,7 @@ int APDS9960_readGesture() {
                 if(byte_read == -1) {
                     return ERROR;
                 }
-
+                
                 for(int i = 0; i < byte_read; i++) {
                     Serial.println(fifo_data[i]);
                 }
@@ -380,13 +498,20 @@ void setup(void) {
         while(1) {}
     }
     //RGB Ambient Light 허용
+    APDS9960_enableProximity(0);
     APDS9960_setMode(APDS9960_ENABLE, GESTURE);
+    APDS9960_Write(APDS9960_ENABLE, 0x45);
     
+    uint8_t buf;
+    APDS9960_Read(APDS9960_ENABLE, &buf, 1);
+    Serial.println(buf);
     Serial.println("setup end");
 }
 
 void loop(void) {
+    
     if(!APDS9960_readGesture()) {
         Serial.println("Gesture Read Failed");
     }
+    
 }
