@@ -56,13 +56,13 @@ int MAX30101_Read_FIFO(uint32_t *red_led, uint32_t *ir_led) {
     *ir_led = 0;
     if ( !MAX30101_Read(MAX30101_FIFO_DATA, buf, 6))
         return 0;
-    *red_led += buf[0] << 16;
-    *red_led += buf[1] << 8;
-    *red_led += buf[2];
+    *red_led += (uint32_t)buf[0] << 16;
+    *red_led += (uint32_t)buf[1] << 8;
+    *red_led += (uint32_t)buf[2];
 
-    *ir_led += buf[3] << 16;
-    *ir_led += buf[4] << 8;
-    *ir_led += buf[5];
+    *ir_led += (uint32_t)buf[3] << 16;
+    *ir_led += (uint32_t)buf[4] << 8;
+    *ir_led += (uint32_t)buf[5];
 
     *red_led &= 0x03FFFF;
     *ir_led &= 0x03FFFF;
@@ -86,6 +86,8 @@ void MAX30101_Init() {
     MAX30101_Write(MAX30101_LED1_PA, 0x1F);
     MAX30101_Write(MAX30101_LED2_PA, 0x1F);
     MAX30101_Write(MAX30101_LED3_PA, 0x1F);
+    MAX30101_Write(MAX30101_MULTI_LED_CTRL1, 0xFF);
+    MAX30101_Write(MAX30101_MULTI_LED_CTRL2, 0xFF);
 }
 
 void setup() {
@@ -107,8 +109,9 @@ void loop() {
     uint32_t red_led, ir_led;
     MAX30101_Read_FIFO(&red_led, &ir_led);
 
-  //  Serial.print("RED LED: ");
+    Serial.print("RED LED: ");
     Serial.println(red_led);
-  //  Serial.print("IR LED: ");
- //   Serial.println(ir_led);
+    Serial.print("IR LED: ");
+    Serial.println(ir_led);
+    delay(1);
 }

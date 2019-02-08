@@ -81,7 +81,7 @@ void MAX30101_Init() {
     MAX30101_Write(MAX30101_OVF_COUNTER, 0x00);
     MAX30101_Write(MAX30101_FIFO_RD_PTR, 0x00);
     MAX30101_Write(MAX30101_FIFO_CONFIG, 0x0F);
-    MAX30101_Write(MAX30101_MODE_CONFIG, 0x02);         //010 심작방동 모드 011 산소포화도 모드 111 멀티LED 모드
+    MAX30101_Write(MAX30101_MODE_CONFIG, 0x03);         //010 심작방동 모드 011 산소포화도 모드 111 멀티LED 모드
     MAX30101_Write(MAX30101_SPO2_CONFIG, 0x27);
     MAX30101_Write(MAX30101_LED1_PA, 0x1F);
     MAX30101_Write(MAX30101_LED2_PA, 0x1F);
@@ -100,7 +100,15 @@ void setup() {
     }
     Serial.println("Succed to check Device");
 
-    MAX30101_Init();
+    //MAX30101_Init();
+    uint8_t buf;
+    MAX30101_Read(MAX30101_FIFO_CONFIG, &buf, 1);
+    Serial.println(buf);
+    MAX30101_Read(MAX30101_MODE_CONFIG, &buf, 1);
+    Serial.println(buf);
+    MAX30101_Read(MAX30101_SPO2_CONFIG, &buf, 1);
+    Serial.println(buf);
+    
 }
 
 void loop() {
@@ -108,5 +116,7 @@ void loop() {
     MAX30101_Read_FIFO(&red_led, &ir_led);
 
     Serial.print("RED LED:\t");
-    Serial.println(red_led);
+    Serial.println(ir_led);
+
+    delay(10);
 }
