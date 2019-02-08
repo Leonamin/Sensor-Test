@@ -349,7 +349,7 @@ int APDS9960_Init() {
         return 0;
     if(!APDS9960_Write(APDS9960_PIHT, 50))
         return 0;
-
+    
     return 1;
 }
 

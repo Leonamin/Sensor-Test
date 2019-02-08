@@ -66,6 +66,15 @@
 #define APDS9960_GFIFO_L        0xFE
 #define APDS9960_GFIFO_R        0xFF
 
+#define APDS9960_PON            0b00000001
+#define APDS9960_AEN            0b00000010
+#define APDS9960_PEN            0b00000100
+#define APDS9960_WEN            0b00001000
+#define APSD9960_AIEN           0b00010000
+#define APDS9960_PIEN           0b00100000
+#define APDS9960_GEN            0b01000000
+#define APDS9960_GVALID         0b00000001
+
 //setMode에 대한 인자
 #define POWER                   0
 #define AMBIENT_LIGHT           1
@@ -100,6 +109,8 @@
 #define GGAIN_2X                1
 #define GGAIN_4X                2
 #define GGAIN_8X                3
+
+#define FIFO_PAUSE_TIME         30
 
 //LED 부스트 값
 #define LED_BOOST_100           0
@@ -289,19 +300,65 @@ int APDS9960_Init() {
     return 1;
 }
 
-int APDS9960_readGesture(uint8_t *gval) {
-    uint8_t val_byte;
-    APDS9960_Read(APDS9960_GFIFO_U, &val_byte, 1);
-    Serial.println(val_byte);
-    gval[0] = val_byte;
-    APDS9960_Read(APDS9960_GFIFO_D, &val_byte, 1);
-    gval[1] = val_byte;
-    APDS9960_Read(APDS9960_GFIFO_L, &val_byte, 1);
-    gval[2] = val_byte;
-    APDS9960_Read(APDS9960_GFIFO_R, &val_byte, 1);
-    gval[3] = val_byte;
+//제스쳐 FIFO 레벨이 임계값보다 커지면 GVALID 비트 1
+int APDS9960_isGestureAvailable()
+{
+    uint8_t val;
+    
+    if( !APDS9960_Read(APDS9960_GSTATUS, &val, 1) ) {
+        return ERROR;
+    }
+    
+    val &= APDS9960_GVALID;
+    
+    if( val == 1) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
 
-    return 1;
+int APDS9960_readGesture() {
+    uint8_t fifo_level = 0;
+    uint8_t byte_read = 0;
+    uint8_t fifo_data[128];
+    uint8_t gstatus;
+    int motion;
+    
+    if( !APDS9960_isGestureAvailable()) {
+        return 0;
+    }
+
+    while(1) {
+        delay(FIFO_PAUSE_TIME);
+
+        if(!APDS9960_Read(APDS9960_GSTATUS, &gstatus, 1))
+            return ERROR;
+
+        if((gstatus & APDS9960_GVALID) == APDS9960_GVALID) {
+            //GFIFO 레벨 읽기
+            if(!APDS9960_Read(APDS9960_GFLVL, &fifo_level, 1))
+                return ERROR;
+            
+            Serial.println(fifo_level);
+//GFIFO level은 현재 읽을 수 있는 데이터 세트 수를 표시
+            if(fifo_level > 0) {
+                byte_read = APDS9960_Read(  APDS9960_GFIFO_U, 
+                                            fifo_data, 
+                                            (fifo_level * 4));
+                if(byte_read == -1) {
+                    return ERROR;
+                }
+
+                for(int i = 0; i < byte_read; i++) {
+                    Serial.println(fifo_data[i]);
+                }
+            }
+        }
+    }
+
+
+    return motion;
 }
 
 void setup(void) {
@@ -316,22 +373,11 @@ void setup(void) {
     }
     //RGB Ambient Light 허용
     APDS9960_setMode(APDS9960_ENABLE, GESTURE);
+    if(!APDS9960_readGesture()) {
+        Serial.println("Gesture Read Failed");
+    }
+    Serial.println("setup end");
 }
 
 void loop(void) {
-    uint8_t gval[4];
-    if(!APDS9960_readGesture(gval)) {
-        Serial.println("ERROR");
-    } else {
-        Serial.print("Gesture\n Up: ");
-        Serial.print(gval[0]);
-        Serial.print("\tDown: ");
-        Serial.print(gval[1]);
-        Serial.print("\tLeft: ");
-        Serial.print(gval[2]);
-        Serial.print("\tRight: ");
-        Serial.print(gval[3]);
-        Serial.print("\t\n");
-    }
-    delay(100);
 }
