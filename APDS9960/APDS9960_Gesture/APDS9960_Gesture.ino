@@ -157,6 +157,8 @@
 #define DEFAULT_GCONF3          0       // All photodiodes active during gesture
 #define DEFAULT_GIEN            0       // Disable gesture interrupts
 
+#define DEBUG                   1
+
 int APDS9960_Write(uint8_t reg, uint8_t cmd) {
     Wire.beginTransmission(APDS9960_I2C_ADDRESS);
     Wire.write(reg);
@@ -306,8 +308,14 @@ int APDS9960_isGestureAvailable()
     uint8_t val;
     
     if( !APDS9960_Read(APDS9960_GSTATUS, &val, 1) ) {
+        #ifdef DEBUG
+        Serial.print("GSTATUS 읽기 실패");
+        #endif
         return ERROR;
     }
+    #ifdef DEBUG
+    Serial.println(val);
+    #endif
     
     val &= APDS9960_GVALID;
     
@@ -373,11 +381,12 @@ void setup(void) {
     }
     //RGB Ambient Light 허용
     APDS9960_setMode(APDS9960_ENABLE, GESTURE);
-    if(!APDS9960_readGesture()) {
-        Serial.println("Gesture Read Failed");
-    }
+    
     Serial.println("setup end");
 }
 
 void loop(void) {
+    if(!APDS9960_readGesture()) {
+        Serial.println("Gesture Read Failed");
+    }
 }
