@@ -361,9 +361,6 @@ int APDS9960_isGestureAvailable()
     uint8_t val;
     
     if( !APDS9960_Read(APDS9960_GSTATUS, &val, 1) ) {
-        #ifdef DEBUG
-        Serial.print("GSTATUS 읽기 실패");
-        #endif
         return ERROR;
     }
     
@@ -475,7 +472,7 @@ int APDS9960_readGesture() {
                 if(byte_read == -1) {
                     return ERROR;
                 }
-                
+                Serial.println("Start");
                 for(int i = 0; i < byte_read; i++) {
                     Serial.println(fifo_data[i]);
                 }
@@ -499,8 +496,7 @@ void setup(void) {
     }
     //RGB Ambient Light 허용
     APDS9960_enableProximity(0);
-    APDS9960_setMode(APDS9960_ENABLE, GESTURE);
-    APDS9960_Write(APDS9960_ENABLE, 0x45);
+    APDS9960_setMode(GESTURE, 1);
     
     uint8_t buf;
     APDS9960_Read(APDS9960_ENABLE, &buf, 1);
