@@ -1,0 +1,4 @@
+# Ignore a VScode Environment Setting
+/**/.vscode
+# Ignore Build Files
+/**/build
