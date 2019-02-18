@@ -755,7 +755,7 @@ int main(int argc, char *argv[])
                     printf("LEFT\n");
                     break;
                 case DIR_RIGHT:
-                    printf("NEAR\n");
+                    printf("RIGHT\n");
                     break;
                 case DIR_NEAR:
                     printf("NEAR\n");
