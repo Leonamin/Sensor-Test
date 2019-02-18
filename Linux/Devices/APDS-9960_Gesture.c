@@ -1,4 +1,12 @@
-#include <Wire.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <linux/i2c-dev.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <sys/ioctl.h>
+#include <string.h>
+#include <unistd.h>
 
 //APDS-9960 I2C Address
 #define APDS9960_I2C_ADDRESS 0x39
@@ -66,15 +74,6 @@
 #define APDS9960_GFIFO_L        0xFE
 #define APDS9960_GFIFO_R        0xFF
 
-#define APDS9960_PON            0b00000001
-#define APDS9960_AEN            0b00000010
-#define APDS9960_PEN            0b00000100
-#define APDS9960_WEN            0b00001000
-#define APSD9960_AIEN           0b00010000
-#define APDS9960_PIEN           0b00100000
-#define APDS9960_GEN            0b01000000
-#define APDS9960_GVALID         0b00000001
-
 //setMode에 대한 인자
 #define POWER                   0
 #define AMBIENT_LIGHT           1
@@ -109,8 +108,6 @@
 #define GGAIN_2X                1
 #define GGAIN_4X                2
 #define GGAIN_8X                3
-
-#define FIFO_PAUSE_TIME         30
 
 //LED 부스트 값
 #define LED_BOOST_100           0
@@ -157,27 +154,24 @@
 #define DEFAULT_GCONF3          0       // All photodiodes active during gesture
 #define DEFAULT_GIEN            0       // Disable gesture interrupts
 
-#define DEBUG                   1
+#define APDS9960_GVALID         0b00000001
+#define FIFO_PAUSE_TIME         30
+int fd;
 
-int APDS9960_Write(uint8_t reg, uint8_t cmd) {
-    Wire.beginTransmission(APDS9960_I2C_ADDRESS);
-    Wire.write(reg);
-    Wire.write(cmd);
-    Wire.endTransmission();
+int WriteData(uint8_t reg_addr, uint8_t *data, int size) {
+    uint8_t *buf;
+    buf = malloc(size + 1);
+    buf[0] = reg_addr;
+    memcpy(buf + 1, data, size);
+    write(fd, buf, size + 1);
+    free(buf);
 
     return 1;
 }
 
-int APDS9960_Read(uint8_t reg, uint8_t *buf, int size) {
-    int i, n;
-    Wire.beginTransmission(APDS9960_I2C_ADDRESS);
-    Wire.write(reg);
-    Wire.endTransmission();
-    Wire.requestFrom(APDS9960_I2C_ADDRESS, size);
-    
-    while(Wire.available() && i < size) {
-        buf[i++] = Wire.read();
-    }
+int ReadData(uint8_t reg_addr, uint8_t *data, int size) {
+    write(fd, &reg_addr, 1);
+    read(fd, data, size);
 
     return 1;
 }
@@ -186,7 +180,7 @@ uint8_t APDS9960_getMode()
 {
     uint8_t enable_value;
     
-    if( !APDS9960_Read(APDS9960_ENABLE, &enable_value, 1) ) {
+    if( !ReadData(APDS9960_ENABLE, &enable_value, 1) ) {
         return ERROR;
     }
     
@@ -199,7 +193,7 @@ int APDS9960_setMode(uint8_t mode, uint8_t enable)
 
     reg_val = APDS9960_getMode();
     if( reg_val == ERROR ) {
-        Serial.println("ERROR");
+        printf("ERROR\n");
         return 0;
     }
     
@@ -218,10 +212,30 @@ int APDS9960_setMode(uint8_t mode, uint8_t enable)
         }
     }
         
-    if( !APDS9960_Write(APDS9960_ENABLE, reg_val) ) {
+    if( !WriteData(APDS9960_ENABLE, &reg_val, 1) ) {
         return 0;
     }
         
+    return 1;
+}
+
+int APDS9960_setLEDDrive(uint8_t drive)
+{
+    uint8_t val;
+    
+    if( !ReadData(APDS9960_CONTROL, &val, 1) ) {
+        return 0;
+    }
+    
+    drive &= 0b00000011;
+    drive = drive << 6;
+    val &= 0b00111111;
+    val |= drive;
+    
+    if( !WriteData(APDS9960_CONTROL, &val, 1) ) {
+        return 0;
+    }
+    
     return 1;
 }
 
@@ -234,42 +248,20 @@ int APDS9960_enablePower()
     return 1;
 }
 
-int APDS9960_setLEDDrive(uint8_t drive)
-{
-    uint8_t val;
-    
-    if( !APDS9960_Read(APDS9960_CONTROL, &val, 1) ) {
-        return false;
-    }
-    
-    drive &= 0b00000011;
-    drive = drive << 6;
-    val &= 0b00111111;
-    val |= drive;
-    
-    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
-        return 0;
-    }
-    
-    return 1;
-}
-
 int APDS9960_setGestureGain(uint8_t gain)
 {
     uint8_t val;
     
-    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+    if(!ReadData(APDS9960_GCONF2, &val, 1))
         return 0;
-    }
     
     gain &= 0b00000011;
     gain = gain << 5;
     val &= 0b10011111;
     val |= gain;
     
-    if( !APDS9960_Write(APDS9960_GCONF2, val) ) {
+    if(!WriteData(APDS9960_GCONF2, &val, 1))
         return 0;
-    }
     
     return 1;
 }
@@ -278,18 +270,16 @@ int APDS9960_setGestureLEDDrive(uint8_t drive)
 {
     uint8_t val;
     
-    if( !APDS9960_Read(APDS9960_GCONF2, val, 1) ) {
+    if(!ReadData(APDS9960_GCONF2, &val, 1))
         return 0;
-    }
     
     drive &= 0b00000011;
     drive = drive << 3;
     val &= 0b11100111;
     val |= drive;
     
-    if( !APDS9960_Write(APDS9960_GCONF2, val) ) {
+    if(!WriteData(APDS9960_GCONF2, &val, 1))
         return 0;
-    }
     
     return 1;
 }
@@ -297,87 +287,83 @@ int APDS9960_setGestureLEDDrive(uint8_t drive)
 int APDS9960_Init() {
 
     //ID 확인
-    uint8_t id;
-    APDS9960_Read(APDS9960_ID, &id, 1);
-    Serial.print("APDS-9960 ID: \t");
-    Serial.println(id);
+    uint8_t id, data;
+    ReadData(APDS9960_ID, &id, 1);
+    printf("APDS-9960 ID: %x\n",id);
     if(id != 0xAB) {
         return 0;
     }
     //ENABLE 레지스터 전부 끄기
     if(!APDS9960_setMode(ALL, 0))      //MSB는 Reserved 비트
         return 0;
+    data = DEFAULT_ATIME;
+    if(!WriteData(APDS9960_ATIME, &data, 1))
+        return 0;
+    data = DEFAULT_WTIME;
+    if(!WriteData(APDS9960_WTIME, &data, 1)) 
+        return 0;
+    data = DEFAULT_PROX_PPULSE;
+    if(!WriteData(APDS9960_PPULSE, &data, 1)) 
+        return 0;
+    data = DEFAULT_POFFSET_UR;
+    if(!WriteData(APDS9960_POFFSET_UR, &data, 1)) 
+        return 0;
+    data = DEFAULT_POFFSET_DL;
+    if(!WriteData(APDS9960_POFFSET_UR, &data, 1)) 
+        return 0;
+    data = DEFAULT_CONFIG1;
+    if(!WriteData(APDS9960_CONFIG1, &data, 1))
+        return 0;
+    data = DEFAULT_CONFIG2;
+    if(!WriteData(APDS9960_CONFIG2, &data, 1))
+        return 0;
+    data = DEFAULT_CONFIG3;
+    if(!WriteData(APDS9960_CONFIG3, &data, 1))
+        return 0;
+    data = 0x00;
+    if(!WriteData(APDS9960_CONTROL, &data, 1))     //LED Drive 12.5, P, A Gain 1x, AGAIN_1X
+        return 0;
+    data = 0xFF;
+    if(!WriteData(APDS9960_AILTL, &data, 1))
+        return 0;
+    if(!WriteData(APDS9960_AILTH, &data, 1))
+        return 0;
+    data = 0x00;
+    if(!WriteData(APDS9960_AIHTL, &data, 1))
+        return 0;
+    if(!WriteData(APDS9960_AIHTH, &data, 1))
+        return 0;
+    data = 0;
+    if(!WriteData(APDS9960_PILT, &data, 1))
+        return 0;
+    data = 50;
+    if(!WriteData(APDS9960_PIHT, &data, 1))
+        return 0;
     
-    if(!APDS9960_Write(APDS9960_ATIME, DEFAULT_ATIME))
+    //제스쳐 설정
+    data = DEFAULT_GPENTH;
+    if(!WriteData(APDS9960_GPENTH, &data, 1))
         return 0;
-    if(!APDS9960_Write(APDS9960_WTIME, DEFAULT_WTIME)) 
+    data = DEFAULT_GEXTH;
+    if(!WriteData(APDS9960_GEXTH, &data, 1))
         return 0;
-    if(!APDS9960_Write(APDS9960_PPULSE, DEFAULT_PROX_PPULSE)) 
-        return 0;
-    if(!APDS9960_Write(APDS9960_POFFSET_UR, DEFAULT_POFFSET_UR)) 
-        return 0;
-    if(!APDS9960_Write(APDS9960_POFFSET_UR, DEFAULT_POFFSET_DL)) 
-        return 0;
-    if(!APDS9960_Write(APDS9960_CONFIG1, DEFAULT_CONFIG1))
-        return 0;
-    if(!APDS9960_Write(APDS9960_CONFIG2, DEFAULT_CONFIG2))
-        return 0;
-    if(!APDS9960_Write(APDS9960_CONFIG3, DEFAULT_CONFIG3))
-        return 0;
-    if(!APDS9960_Write(APDS9960_CONTROL, 0x00))     //LED Drive 12.5, P, A Gain 1x, AGAIN_1X
-        return 0;
-    if(!APDS9960_Write(APDS9960_AILTL, 0xFF))
-        return 0;
-    if(!APDS9960_Write(APDS9960_AILTH, 0xFF))
-        return 0;
-    if(!APDS9960_Write(APDS9960_AIHTL, 0x00))
-        return 0;
-    if(!APDS9960_Write(APDS9960_AIHTH, 0x00))
-        return 0;
-    if(!APDS9960_Write(APDS9960_PILT, 0))
-        return 0;
-    if(!APDS9960_Write(APDS9960_PIHT, 50))
-        return 0;
-
-    //제스처 설정
-    if(!APDS9960_Write(APDS9960_GPENTH, DEFAULT_GPENTH))
-        return 0;
-    if(!APDS9960_Write(APDS9960_GEXTH, DEFAULT_GEXTH))
-        return 0;
-    if(!APDS9960_Write(APDS9960_GCONF1, DEFAULT_GCONF1))
+    data = DEFAULT_GCONF1;
+    if(!WriteData(APDS9960_GCONF1, &data, 1))
         return 0;
     if(!APDS9960_setGestureGain(DEFAULT_GGAIN))
         return 0;
-    if(!APDS9960_setGestureLEDDrive(DEFAULT_GLDRIVE) ) {
+    if(!APDS9960_setGestureLEDDrive(DEFAULT_GLDRIVE) )
         return 0;
-    }
-
+    
+    
     return 1;
-}
-
-//제스쳐 FIFO 레벨이 임계값보다 커지면 GVALID 비트 1
-int APDS9960_isGestureAvailable()
-{
-    uint8_t val;
-    
-    if( !APDS9960_Read(APDS9960_GSTATUS, &val, 1) ) {
-        return ERROR;
-    }
-    
-    val &= APDS9960_GVALID;
-    
-    if( val == 1) {
-        return 1;
-    } else {
-        return 0;
-    }
 }
 
 int APDS9960_setProximityGain(uint8_t drive)
 {
     uint8_t val;
     
-    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
+    if( !ReadData(APDS9960_CONTROL, &val, 1) ) {
         return 0;
     }
     
@@ -386,7 +372,7 @@ int APDS9960_setProximityGain(uint8_t drive)
     val &= 0b11110011;
     val |= drive;
     
-    if( !APDS9960_Write(APDS9960_CONTROL, val) ) {
+    if( !WriteData(APDS9960_CONTROL, &val, 1) ) {
         return 0;
     }
     
@@ -397,7 +383,7 @@ int APDS9960_setProximityIntEnable(uint8_t enable)
 {
     uint8_t val;
     
-    if( !APDS9960_Read(APDS9960_ENABLE, &val, 1) ) {
+    if( !ReadData(APDS9960_ENABLE, &val, 1) ) {
         return 0;
     }
     
@@ -406,7 +392,7 @@ int APDS9960_setProximityIntEnable(uint8_t enable)
     val &= 0b11011111;
     val |= enable;
     
-    if( !APDS9960_Write(APDS9960_ENABLE, val) ) {
+    if( !WriteData(APDS9960_ENABLE, &val, 1) ) {
         return 0;
     }
     
@@ -437,6 +423,24 @@ int APDS9960_enableProximity(int interrupt) {
     }
 }
 
+//제스쳐 FIFO 레벨이 임계값보다 커지면 GVALID 비트 1
+int APDS9960_isGestureAvailable()
+{
+    uint8_t val;
+    
+    if( !ReadData(APDS9960_GSTATUS, &val, 1) ) {
+        return ERROR;
+    }
+    
+    val &= APDS9960_GVALID;
+    
+    if( val == 1) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
 
 int APDS9960_readGesture() {
     uint8_t fifo_level = 0;
@@ -453,28 +457,24 @@ int APDS9960_readGesture() {
     }
 
     while(1) {
-        delay(FIFO_PAUSE_TIME);
+        usleep(FIFO_PAUSE_TIME * 1000);
 
-        if(!APDS9960_Read(APDS9960_GSTATUS, &gstatus, 1))
+        if(!ReadData(APDS9960_GSTATUS, &gstatus, 1))
             return ERROR;
 
         if((gstatus & APDS9960_GVALID) == APDS9960_GVALID) {
             //GFIFO 레벨 읽기
-            if(!APDS9960_Read(APDS9960_GFLVL, &fifo_level, 1))
+            if(!ReadData(APDS9960_GFLVL, &fifo_level, 1))
                 return ERROR;
             
-            Serial.println(fifo_level);
+            printf("FIFO Level: %d\n", fifo_level);
 //GFIFO level은 현재 읽을 수 있는 데이터 세트 수를 표시
             if(fifo_level > 0) {
-                byte_read = APDS9960_Read(  APDS9960_GFIFO_U, 
-                                            fifo_data, 
-                                            (fifo_level * 4));
-                if(byte_read == -1) {
-                    return ERROR;
-                }
-                Serial.println("Start");
-                for(int i = 0; i < byte_read; i++) {
-                    Serial.println(fifo_data[i]);
+                ReadData(APDS9960_GFIFO_U, fifo_data, (fifo_level * 4));
+
+                printf("Start\n");
+                for(int i = 0; i < (fifo_level * 4); i++) {
+                    printf("%d\n",fifo_data[i]);
                 }
             }
         }
@@ -484,30 +484,34 @@ int APDS9960_readGesture() {
     return motion;
 }
 
-void setup(void) {
-    Serial.begin(115200);
-    Serial.println("Serial Connected");
-    Wire.begin();
-    Serial.println("I2C Connected");
 
-    if(!APDS9960_Init()) {
-        Serial.println("Failed to call Device");
-        while(1) {}
-    }
+
+int main(int argc, char *argv[])
+{
+    uint8_t buf;
     
+    if((fd = open(argv[1], O_RDWR)) < 0) {
+        perror("Failed to open i2c-0");
+        exit(1);
+    }
+    if(ioctl(fd, I2C_SLAVE, APDS9960_I2C_ADDRESS) < 0) {
+        perror("Failed to acquire bus access and/or talk to slave\n");
+        exit(1);
+    }
+    if(!APDS9960_Init()) {
+        printf("Failed to call Device");
+        exit(1);
+    }
     APDS9960_enableProximity(0);
     APDS9960_setMode(GESTURE, 1);
-    
-    uint8_t buf;
-    APDS9960_Read(APDS9960_ENABLE, &buf, 1);
-    Serial.println(buf);
-    Serial.println("setup end");
-}
-
-void loop(void) {
-    
-    if(!APDS9960_readGesture()) {
-        Serial.println("Gesture Read Failed");
+    ReadData(APDS9960_ENABLE, &buf, 1);
+    printf("%x\nSetup End\n", buf);
+    while(1) {
+        if(!APDS9960_readGesture()) {
+            printf("Gesture Read Failed\n");
+        }
+        sleep(1);
     }
-    
+
+    return 0;
 }
