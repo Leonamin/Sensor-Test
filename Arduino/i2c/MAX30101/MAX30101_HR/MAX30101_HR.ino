@@ -16,7 +16,7 @@
 #define MAX30101_LED1_PA            0x0C
 #define MAX30101_LED2_PA            0x0D
 #define MAX30101_LED3_PA            0x0E
-#define MAX30101_LED3_PA            0x0F
+#define MAX30101_LED4_PA            0x0F
 #define MAX30101_PILOT_PA           0x10
 #define MAX30101_MULTI_LED_CTRL1    0x11
 #define MAX30101_MULTI_LED_CTRL2    0x12

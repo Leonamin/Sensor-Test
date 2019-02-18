@@ -501,7 +501,7 @@ int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_
     int ud_delta;
     int lr_delta;
     int i;
-
+    //제스쳐 임계를 넘는 초기 값
     for(i = 0; i < total_gesture; i++) {
         if((u_data[i] > GESTURE_THRESHOLD_OUT) &&
             (d_data[i] > GESTURE_THRESHOLD_OUT) &&
@@ -518,6 +518,7 @@ int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_
     if( (u_first == 0) || (d_first == 0) || (l_first == 0) || (r_first == 0) ) {
         return 0;
     }
+    //제스쳐 임계를 넘는 마지막 값
     for(i = total_gesture - 1; i >= 0; i--) {
         if( (u_data[i] > GESTURE_THRESHOLD_OUT) &&
             (d_data[i] > GESTURE_THRESHOLD_OUT) &&
@@ -531,17 +532,20 @@ int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_
             break;
         }
     }
+    //비율 재기
     ud_ratio_first = ((u_first - d_first) * 100) / (u_first + d_first);
     lr_ratio_first = ((l_first - r_first) * 100) / (l_first + r_first);
     ud_ratio_last = ((u_last - d_last) * 100) / (u_last + d_last);
     lr_ratio_last = ((l_last - r_last) * 100) / (l_last + r_last);
-
+    
+    //처음과 마지막의 변화량
     ud_delta = ud_ratio_last - ud_ratio_first;
     lr_delta = lr_ratio_last - lr_ratio_first;
 
     gesture_ud_delta_ += ud_delta;
     gesture_lr_delta_ += lr_delta;
 
+    //변화량과 제스쳐 민감도 비교 
     if( gesture_ud_delta_ >= GESTURE_SENSITIVITY_1 ) {
         gesture_ud_count_ = 1;
     } else if( gesture_ud_delta_ <= -GESTURE_SENSITIVITY_1 ) {
@@ -558,6 +562,7 @@ int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_
         gesture_lr_count_ = 0;
     }
 
+    //절대값이랑 민감도 비교
     if( (gesture_ud_count_ == 0) && (gesture_lr_count_ == 0) ) {
         if( (abs(ud_delta) < GESTURE_SENSITIVITY_2) && \
             (abs(lr_delta) < GESTURE_SENSITIVITY_2) ) {
@@ -567,7 +572,7 @@ int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_
             } else if( (ud_delta != 0) || (lr_delta != 0) ) {
                 gesture_far_count_++;
             }
-            
+            //변화량에 따라 먼거리와 가까운 거리 재기
             if( (gesture_near_count_ >= 10) && (gesture_far_count_ >= 2) ) {
                 if( (ud_delta == 0) && (lr_delta == 0) ) {
                     gesture_state_ = NEAR_STATE;
@@ -599,7 +604,6 @@ int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_
 
 int decodeGesture()
 {
-    /* Return if near or far event is detected */
     if( gesture_state_ == NEAR_STATE ) {
         gesture_motion_ = DIR_NEAR;
         return 1;
@@ -608,7 +612,7 @@ int decodeGesture()
         return 1;
     }
     
-    /* Determine swipe direction */
+    //방향 재기
     if( (gesture_ud_count_ == -1) && (gesture_lr_count_ == 0) ) {
         gesture_motion_ = DIR_UP;
     } else if( (gesture_ud_count_ == 1) && (gesture_lr_count_ == 0) ) {
