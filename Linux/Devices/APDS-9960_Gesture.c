@@ -354,8 +354,23 @@ int APDS9960_Init() {
         return 0;
     if(!APDS9960_setGestureLEDDrive(DEFAULT_GLDRIVE) )
         return 0;
-    
-    
+    //기본 오프셋 설정
+    data = 0;
+    if(!WriteData(APDS9960_GOFFSET_U, &data, 1))
+        return 0;
+    data = 0;
+    if(!WriteData(APDS9960_GOFFSET_D, &data, 1))
+        return 0;
+    data = 0;
+    if(!WriteData(APDS9960_GOFFSET_L, &data, 1))
+        return 0;
+    data = 0;
+    if(!WriteData(APDS9960_GOFFSET_R, &data, 1))
+        return 0;
+    data = DEFAULT_GPULSE;
+    if(!WriteData(APDS9960_GPULSE, &data, 1))
+        return 0;
+
     return 1;
 }
 
@@ -447,6 +462,10 @@ int APDS9960_readGesture() {
     uint8_t byte_read = 0;
     uint8_t fifo_data[128];
     uint8_t gstatus;
+    uint8_t u_data[32];
+    uint8_t d_data[32];
+    uint8_t l_data[32];
+    uint8_t r_data[32];
     int motion;
     
     if( !APDS9960_isGestureAvailable()) {
@@ -471,11 +490,19 @@ int APDS9960_readGesture() {
 //GFIFO level은 현재 읽을 수 있는 데이터 세트 수를 표시
             if(fifo_level > 0) {
                 ReadData(APDS9960_GFIFO_U, fifo_data, (fifo_level * 4));
-
+#ifdef DEBUG
                 printf("Start\n");
                 for(int i = 0; i < (fifo_level * 4); i++) {
-                    printf("%d\n",fifo_data[i]);
+                    printf("%d\n",fifo_data[i]); 
                 }
+#endif
+                for(int i = 0, j = 0; i < fifo_level; i++,j += 4) {
+                    u_data[i] = fifo_data[j + 0];
+                    d_data[i] = fifo_data[j + 1];
+                    l_data[i] = fifo_data[j + 2];
+                    r_data[i] = fifo_data[j + 3];
+                }
+                printf("Up: %d, Down: %d, Left: %d, Right: %d\n", u_data[fifo_level - 1], d_data[fifo_level - 1], l_data[fifo_level - 1], r_data[fifo_level - 1]);
             }
         }
     }
