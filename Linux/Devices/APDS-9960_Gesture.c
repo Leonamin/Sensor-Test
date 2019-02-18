@@ -156,7 +156,36 @@
 
 #define APDS9960_GVALID         0b00000001
 #define FIFO_PAUSE_TIME         30
+
 int fd;
+int gesture_ud_delta_;
+int gesture_lr_delta_;
+int gesture_ud_count_;
+int gesture_lr_count_;
+int gesture_near_count_;
+int gesture_far_count_;
+int gesture_state_;
+int gesture_motion_;
+
+enum {
+  DIR_NONE,
+  DIR_LEFT,
+  DIR_RIGHT,
+  DIR_UP,
+  DIR_DOWN,
+  DIR_NEAR,
+  DIR_FAR,
+  DIR_ALL
+};
+
+/* State definitions */
+enum {
+  NA_STATE,
+  NEAR_STATE,
+  FAR_STATE,
+  ALL_STATE
+};
+
 
 int WriteData(uint8_t reg_addr, uint8_t *data, int size) {
     uint8_t *buf;
@@ -456,6 +485,183 @@ int APDS9960_isGestureAvailable()
     }
 }
 
+int processGestureData(uint8_t *u_data, uint8_t *d_data, uint8_t *l_data, uint8_t *r_data, int total_gesture) {
+    uint8_t u_first = 0;
+    uint8_t d_first = 0;
+    uint8_t l_first = 0;
+    uint8_t r_first = 0;
+    uint8_t u_last = 0;
+    uint8_t d_last = 0;
+    uint8_t l_last = 0;
+    uint8_t r_last = 0;
+    int ud_ratio_first;
+    int lr_ratio_first;
+    int ud_ratio_last;
+    int lr_ratio_last;
+    int ud_delta;
+    int lr_delta;
+    int i;
+
+    for(i = 0; i < total_gesture; i++) {
+        if((u_data[i] > GESTURE_THRESHOLD_OUT) &&
+            (d_data[i] > GESTURE_THRESHOLD_OUT) &&
+            (l_data[i] > GESTURE_THRESHOLD_OUT) &&
+            (r_data[i] > GESTURE_THRESHOLD_OUT) ) {
+            
+            u_first = u_data[i];
+            d_first = d_data[i];
+            l_first = l_data[i];
+            r_first = r_data[i];
+            break;
+        }
+    }
+    if( (u_first == 0) || (d_first == 0) || (l_first == 0) || (r_first == 0) ) {
+        return 0;
+    }
+    for(i = total_gesture - 1; i >= 0; i--) {
+        if( (u_data[i] > GESTURE_THRESHOLD_OUT) &&
+            (d_data[i] > GESTURE_THRESHOLD_OUT) &&
+            (l_data[i] > GESTURE_THRESHOLD_OUT) &&
+            (r_data[i] > GESTURE_THRESHOLD_OUT) ) {
+            
+            u_last = u_data[i];
+            d_last = d_data[i];
+            l_last = l_data[i];
+            r_last = r_data[i];
+            break;
+        }
+    }
+    ud_ratio_first = ((u_first - d_first) * 100) / (u_first + d_first);
+    lr_ratio_first = ((l_first - r_first) * 100) / (l_first + r_first);
+    ud_ratio_last = ((u_last - d_last) * 100) / (u_last + d_last);
+    lr_ratio_last = ((l_last - r_last) * 100) / (l_last + r_last);
+
+    ud_delta = ud_ratio_last - ud_ratio_first;
+    lr_delta = lr_ratio_last - lr_ratio_first;
+
+    gesture_ud_delta_ += ud_delta;
+    gesture_lr_delta_ += lr_delta;
+
+    if( gesture_ud_delta_ >= GESTURE_SENSITIVITY_1 ) {
+        gesture_ud_count_ = 1;
+    } else if( gesture_ud_delta_ <= -GESTURE_SENSITIVITY_1 ) {
+        gesture_ud_count_ = -1;
+    } else {
+        gesture_ud_count_ = 0;
+    }
+    
+    if( gesture_lr_delta_ >= GESTURE_SENSITIVITY_1 ) {
+        gesture_lr_count_ = 1;
+    } else if( gesture_lr_delta_ <= -GESTURE_SENSITIVITY_1 ) {
+        gesture_lr_count_ = -1;
+    } else {
+        gesture_lr_count_ = 0;
+    }
+
+    if( (gesture_ud_count_ == 0) && (gesture_lr_count_ == 0) ) {
+        if( (abs(ud_delta) < GESTURE_SENSITIVITY_2) && \
+            (abs(lr_delta) < GESTURE_SENSITIVITY_2) ) {
+            
+            if( (ud_delta == 0) && (lr_delta == 0) ) {
+                gesture_near_count_++;
+            } else if( (ud_delta != 0) || (lr_delta != 0) ) {
+                gesture_far_count_++;
+            }
+            
+            if( (gesture_near_count_ >= 10) && (gesture_far_count_ >= 2) ) {
+                if( (ud_delta == 0) && (lr_delta == 0) ) {
+                    gesture_state_ = NEAR_STATE;
+                } else if( (ud_delta != 0) && (lr_delta != 0) ) {
+                    gesture_state_ = FAR_STATE;
+                }
+                return 1;
+            }
+        }
+    } else {
+        if( (abs(ud_delta) < GESTURE_SENSITIVITY_2) && \
+            (abs(lr_delta) < GESTURE_SENSITIVITY_2) ) {
+                
+            if( (ud_delta == 0) && (lr_delta == 0) ) {
+                gesture_near_count_++;
+            }
+            
+            if( gesture_near_count_ >= 10 ) {
+                gesture_ud_count_ = 0;
+                gesture_lr_count_ = 0;
+                gesture_ud_delta_ = 0;
+                gesture_lr_delta_ = 0;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int decodeGesture()
+{
+    /* Return if near or far event is detected */
+    if( gesture_state_ == NEAR_STATE ) {
+        gesture_motion_ = DIR_NEAR;
+        return 1;
+    } else if ( gesture_state_ == FAR_STATE ) {
+        gesture_motion_ = DIR_FAR;
+        return 1;
+    }
+    
+    /* Determine swipe direction */
+    if( (gesture_ud_count_ == -1) && (gesture_lr_count_ == 0) ) {
+        gesture_motion_ = DIR_UP;
+    } else if( (gesture_ud_count_ == 1) && (gesture_lr_count_ == 0) ) {
+        gesture_motion_ = DIR_DOWN;
+    } else if( (gesture_ud_count_ == 0) && (gesture_lr_count_ == 1) ) {
+        gesture_motion_ = DIR_RIGHT;
+    } else if( (gesture_ud_count_ == 0) && (gesture_lr_count_ == -1) ) {
+        gesture_motion_ = DIR_LEFT;
+    } else if( (gesture_ud_count_ == -1) && (gesture_lr_count_ == 1) ) {
+        if( abs(gesture_ud_delta_) > abs(gesture_lr_delta_) ) {
+            gesture_motion_ = DIR_UP;
+        } else {
+            gesture_motion_ = DIR_RIGHT;
+        }
+    } else if( (gesture_ud_count_ == 1) && (gesture_lr_count_ == -1) ) {
+        if( abs(gesture_ud_delta_) > abs(gesture_lr_delta_) ) {
+            gesture_motion_ = DIR_DOWN;
+        } else {
+            gesture_motion_ = DIR_LEFT;
+        }
+    } else if( (gesture_ud_count_ == -1) && (gesture_lr_count_ == -1) ) {
+        if( abs(gesture_ud_delta_) > abs(gesture_lr_delta_) ) {
+            gesture_motion_ = DIR_UP;
+        } else {
+            gesture_motion_ = DIR_LEFT;
+        }
+    } else if( (gesture_ud_count_ == 1) && (gesture_lr_count_ == 1) ) {
+        if( abs(gesture_ud_delta_) > abs(gesture_lr_delta_) ) {
+            gesture_motion_ = DIR_DOWN;
+        } else {
+            gesture_motion_ = DIR_RIGHT;
+        }
+    } else {
+        return 0;
+    }
+    
+    return 1;
+}
+
+void resetGestureParameters()
+{
+    gesture_ud_delta_ = 0;
+    gesture_lr_delta_ = 0;
+    
+    gesture_ud_count_ = 0;
+    gesture_lr_count_ = 0;
+    
+    gesture_near_count_ = 0;
+    gesture_far_count_ = 0;
+    
+    gesture_state_ = 0;
+    gesture_motion_ = DIR_NONE;
+}
 
 int APDS9960_readGesture() {
     uint8_t fifo_level = 0;
@@ -468,25 +674,19 @@ int APDS9960_readGesture() {
     uint8_t r_data[32];
     int motion;
     
-    if( !APDS9960_isGestureAvailable()) {
-#ifdef DEBUG
-        Serial.println("un available gesture");
-#endif
+    if( !APDS9960_isGestureAvailable()) 
         return 0;
-    }
 
     while(1) {
         usleep(FIFO_PAUSE_TIME * 1000);
 
         if(!ReadData(APDS9960_GSTATUS, &gstatus, 1))
             return ERROR;
-
+//FIFO 레벨이 FIFO 임계값에 도달하면 GVALID 발생 GMODE와 GFLVL이 0이되면 리셋
         if((gstatus & APDS9960_GVALID) == APDS9960_GVALID) {
             //GFIFO 레벨 읽기
             if(!ReadData(APDS9960_GFLVL, &fifo_level, 1))
                 return ERROR;
-            
-            printf("FIFO Level: %d\n", fifo_level);
 //GFIFO level은 현재 읽을 수 있는 데이터 세트 수를 표시
             if(fifo_level > 0) {
                 ReadData(APDS9960_GFIFO_U, fifo_data, (fifo_level * 4));
@@ -502,13 +702,21 @@ int APDS9960_readGesture() {
                     l_data[i] = fifo_data[j + 2];
                     r_data[i] = fifo_data[j + 3];
                 }
-                printf("Up: %d, Down: %d, Left: %d, Right: %d\n", u_data[fifo_level - 1], d_data[fifo_level - 1], l_data[fifo_level - 1], r_data[fifo_level - 1]);
+                if(processGestureData(u_data, d_data, l_data, r_data, fifo_level)) {
+                    if(decodeGesture()) {
+
+                    }
+                }
             }
+
+        } else {
+            usleep(FIFO_PAUSE_TIME * 1000);
+            decodeGesture();
+            motion = gesture_motion_;    
+            resetGestureParameters();
+            return motion;
         }
     }
-
-
-    return motion;
 }
 
 
@@ -534,10 +742,31 @@ int main(int argc, char *argv[])
     ReadData(APDS9960_ENABLE, &buf, 1);
     printf("%x\nSetup End\n", buf);
     while(1) {
-        if(!APDS9960_readGesture()) {
-            printf("Gesture Read Failed\n");
+        if(APDS9960_isGestureAvailable()) {
+            switch ( APDS9960_readGesture())
+            {
+                case DIR_UP:
+                    printf("UP\n");
+                    break;
+                case DIR_DOWN:
+                    printf("DOWN\n");
+                    break;
+                case DIR_LEFT:
+                    printf("LEFT\n");
+                    break;
+                case DIR_RIGHT:
+                    printf("NEAR\n");
+                    break;
+                case DIR_NEAR:
+                    printf("NEAR\n");
+                    break;
+                case DIR_FAR:
+                    printf("FAR\n");
+                    break;
+                default:
+                    break;
+            }
         }
-        sleep(1);
     }
 
     return 0;
