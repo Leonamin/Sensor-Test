@@ -69,6 +69,11 @@ int ReadData(uint8_t reg_addr, uint8_t *data, int size) {
     return 1;
 }
 
+void RESET() {
+    uint8_t data = 0x40;
+    WriteData(MAX30105_MODE_CONFIG, &data, 1);
+}
+
 int INIT() {
     uint8_t id, data;
     if(!ReadData(MAX30105_PART_ID, &id, 1)) {
@@ -97,10 +102,13 @@ int INIT() {
     WriteData(MAX30105_MODE_CONFIG, &data, 1);         //010 심작방동 모드 011 산소포화도 모드 111 멀티LED 모드
     data = 0x27;
     WriteData(MAX30105_SPO2_CONFIG, &data, 1);      //ADC 범위 4096, Sample per sec 100, ADC 해상도 18
-    data = 0xAF;
+    data = 0x1F;
     WriteData(MAX30105_LED1_PA, &data, 1);
+    data = 0x1F;
     WriteData(MAX30105_LED2_PA, &data, 1);
+    data = 0x1F;
     WriteData(MAX30105_LED3_PA, &data, 1);
+    data = 0x1F;
     WriteData(MAX30105_LED_PROX_AMP, &data, 1);
     data = 0x21;
     WriteData(MAX30105_MULTI_LED_CTRL1, &data, 1);
@@ -114,6 +122,7 @@ int MAX30101_Read_FIFO(uint32_t *red_led, uint32_t *ir_led, uint32_t *green_led)
     uint8_t buf[9];
     *red_led = 0;
     *ir_led = 0;
+    *green_led = 0;
     if ( !ReadData(MAX30105_FIFO_DATA, buf, 9))
         return 0;
     *red_led += (uint32_t)buf[0] << 16;
@@ -124,9 +133,9 @@ int MAX30101_Read_FIFO(uint32_t *red_led, uint32_t *ir_led, uint32_t *green_led)
     *ir_led += (uint32_t)buf[4] << 8;
     *ir_led += (uint32_t)buf[5];
 
-    *green_led += (uint32_t)buf[3] << 16;
-    *green_led += (uint32_t)buf[4] << 8;
-    *green_led += (uint32_t)buf[5];
+    *green_led += (uint32_t)buf[6] << 16;
+    *green_led += (uint32_t)buf[7] << 8;
+    *green_led += (uint32_t)buf[8];
 
     *red_led &= 0x03FFFF;
     *ir_led &= 0x03FFFF;
@@ -146,11 +155,11 @@ int main(int argc, char *argv[])
         perror("Failed to acquire bus access and/or talk to slave\n");
         exit(1);
     }
+    RESET();
     INIT();
     while(1) {
         MAX30101_Read_FIFO(&red_led, &ir_led, &green_led);
         printf("Red: %d, IR: %d, Green: %d\n", red_led, ir_led, green_led);
-        usleep(100000);
     }
 
     return 0;
