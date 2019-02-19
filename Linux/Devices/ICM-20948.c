@@ -116,6 +116,7 @@ int ReadData(uint8_t reg_addr, uint8_t *data, int size) {
 void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
     uint8_t buf[14];
     ReadData(ICM20948_ACCEL_XOUT_H, buf, 14);
+    
     data->x_accel = ((int)buf[0] << 8) + buf[1];
     data->y_accel = ((int)buf[2] << 8) + buf[3];
     data->z_accel = ((int)buf[4] << 8) + buf[5];
@@ -129,10 +130,12 @@ void INIT() {
     uint8_t id, data;
     ReadData(ICM20948_WHO_AM_I, &id, 1);
     if(id != 0xEA) {
-        printf("id: %d\t Different with real ID(0xEA). . .\n", id);
+        printf("id: %x\t Different with real ID(0xEA). . .\n", id);
+        exit(1);
     }
     data = 0x00;
-  //  WriteData(ICM20948_PWR_MGMT_2, &data, 1);       //자이로 가속도 모두 허용
+    WriteData(ICM20948_PWR_MGMT_2, &data, 1);       //자이로 가속도 모두 허용
+    ReadData(ICM20948_PWR_MGMT_2, &data, 1);
     data = 0x00;
     WriteData(ICM20948_PWR_MGMT_1, &data, 1);       //Sleep 모드 나오기
 }
@@ -142,9 +145,44 @@ void sleepmode() {
     WriteData(ICM20948_PWR_MGMT_1, &data, 1);       //7번쨰 비트가 sleep 모드 비트
 }
 
+void calibrateSensor(Accel_Gyro_Temp *data) {
+    int i;
+    double x_accel = 0;
+    double y_accel = 0;
+    double z_accel = 0;
+    double x_gyro = 0;
+    double y_gyro = 0;
+    double z_gyro = 0;
+
+    for(i = 0; i < 10; i++) {
+        ReadAccelGyroTemp(data);
+        x_accel += data->x_accel;
+        y_accel += data->y_accel;
+        z_accel += data->z_accel;
+        x_gyro += data->x_gyro;
+        y_gyro += data->y_gyro;
+        z_gyro += data->z_gyro;
+        usleep(100000);
+    }
+    x_accel /= 10;
+    y_accel /= 10;
+    z_accel /= 10;
+    x_gyro /= 10;
+    y_gyro /= 10;
+    z_gyro /= 10;
+
+    data->x_accel = x_accel;
+    data->y_accel = y_accel;
+    data->z_accel = z_accel;
+    data->x_gyro = x_gyro;
+    data->y_gyro = y_gyro;
+    data->z_gyro = z_gyro;
+}
+
 int main(int argc, char *argv[]) 
 {
     Accel_Gyro_Temp data;
+    Accel_Gyro_Temp base;
 
     if((fd = open(argv[1], O_RDWR)) < 0) {
         printf("Failed to open i2c-0");
@@ -155,11 +193,18 @@ int main(int argc, char *argv[])
         exit(1);
     }
     INIT();
-
+    calibrateSensor(&base);
     while(1) {
         ReadAccelGyroTemp(&data);
-        printf("Accel X: %6d, Y: %6d, Z: %6d\tGyro X: %6d, Y: %6d, Z: %6d\tTemp: %d\n", data.x_accel, data.y_accel, data.z_accel, data.x_gyro, data.y_gyro, data.z_gyro, data.temp);
-        usleep(100000);
+        //printf("Accel X: %6d, Y: %6d, Z: %6d\tGyro X: %6d, Y: %6d, Z: %6d\tTemp: %d\n", data.x_accel, data.y_accel, data.z_accel, data.x_gyro, data.y_gyro, data.z_gyro, data.temp);
+        double FS_SEL = 131;
+        double gyroX = (data.x_gyro - base.x_gyro) / FS_SEL;
+        double gyroY = (data.y_gyro - base.y_gyro) / FS_SEL;
+        double gyroZ = (data.z_gyro - base.z_gyro) / FS_SEL;
+        
+        printf("Gyro X: %6.3lf,Y: %6.3lf,Z: %6.3lf\n", gyroX, gyroY, gyroZ);
+        
+        usleep(1000000);
     }
 
     return 0;
