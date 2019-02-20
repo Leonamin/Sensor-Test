@@ -118,6 +118,17 @@ int INIT() {
     return 1;
 }
 
+void MAX30105_Read_Temp(double *temp) {
+    uint8_t data = 0x01;
+    int8_t tempInt;
+    uint8_t tempFrac;
+    WriteData(MAX30105_TEMP_CONFIG, &data, 1);
+    ReadData(MAX30105_TEMP_INTR, &tempInt, 1);
+    ReadData(MAX30105_TEMP_FRAC, &tempFrac, 1);
+
+    *temp = (double)tempInt + ((double)tempFrac * 0.0625);
+}
+
 int MAX30101_Read_FIFO(uint32_t *red_led, uint32_t *ir_led, uint32_t *green_led) {
     uint8_t buf[9];
     *red_led = 0;
@@ -147,6 +158,7 @@ int MAX30101_Read_FIFO(uint32_t *red_led, uint32_t *ir_led, uint32_t *green_led)
 int main(int argc, char *argv[]) 
 {
     uint32_t red_led, ir_led, green_led;
+    double temp;
     if((fd = open(argv[1], O_RDWR)) < 0) {
         printf("Failed to open i2c-0");
         exit(1);
@@ -159,7 +171,9 @@ int main(int argc, char *argv[])
     INIT();
     while(1) {
         MAX30101_Read_FIFO(&red_led, &ir_led, &green_led);
-        printf("Red: %d, IR: %d, Green: %d\n", red_led, ir_led, green_led);
+        MAX30105_Read_Temp(&temp);
+        printf("Red: %7d, IR: %7d, Green: %7d, TEMP: %.3lf\n", red_led, ir_led, green_led, temp);
+        usleep(10000);
     }
 
     return 0;
