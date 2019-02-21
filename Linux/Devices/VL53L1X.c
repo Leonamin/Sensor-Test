@@ -53,6 +53,7 @@ enum DistanceMode {
 };
 
 int fd;
+uint16_t osc_calibrate_val, fast_osc_frequency;
 
 int WriteData(uint16_t reg_addr, uint8_t *data, int size) {
     uint8_t *buf;
@@ -231,7 +232,7 @@ void INIT() {
 
     setDistanceMode(Long);
 
-    ReadData(MM_CONFIG__OUTER_OFFSET_MM, data, 2);
+    ReadData(MM_CONFIG__OUTER_OFFSET_MM, data, 2); 
     data[0] = data[0] * 4;
     data[1] = data[1] * 4;
     WriteData(ALGO__PART_TO_PART_RANGE_OFFSET_MM, data, 2);
