@@ -38,6 +38,7 @@
 #define RANGE_CONFIG__SIGMA_THRESH                      0x0064
 #define RANGE_CONFIG__MIN_COUNT_RATE_RTN_LIMIT_MCPS     0x0066
 #define RANGE_CONFIG__VALID_PHASE_HIGH                  0x0069
+#define SYSTEM__INTERMEASUREMENT_PERIOD                 0x006C
 #define SYSTEM__GROUPED_PARAMETER_HOLD_0                0x0071
 #define SYSTEM__SEED_CONFIG                             0x0077
 #define SD_CONFIG__WOI_SD0                              0x0078
@@ -48,6 +49,9 @@
 #define SD_CONFIG__QUANTIFIER                           0x007E
 #define SYSTEM__SEQUENCE_CONFIG                         0x0081
 #define SYSTEM__GROUPED_PARAMETER_HOLD                  0x0082
+#define SYSTEM__INTERRUPT_CLEAR                         0x0086
+#define SYSTEM__MODE_START                              0x0087
+#define RESULT__RANGE_STATUS                            0x0089
 #define RESULT__OSC_CALIBRATE_VAL                       0x00DE
 
 #define IDENTIFICATION__MODEL_ID                        0x010F
@@ -60,9 +64,87 @@ enum DistanceMode {
     Short
 };
 
+enum RangeStatus
+{
+    RangeValid                =   0,
+
+    // "sigma estimator check is above the internal defined threshold"
+    // (sigma = standard deviation of measurement)
+    SigmaFail                 =   1,
+
+    // "signal value is below the internal defined threshold"
+    SignalFail                =   2,
+
+    // "Target is below minimum detection threshold."
+    RangeValidMinRangeClipped =   3,
+
+    // "phase is out of bounds"
+    // (nothing detected in range; try a longer distance mode if applicable)
+    OutOfBoundsFail           =   4,
+
+    // "HW or VCSEL failure"
+    HardwareFail              =   5,
+
+    // "The Range is valid but the wraparound check has not been done."
+    RangeValidNoWrapCheckFail =   6,
+
+    // "Wrapped target, not matching phases"
+    // "no matching phase in other VCSEL period timing."
+    WrapTargetFail            =   7,
+
+    // "Internal algo underflow or overflow in lite ranging."
+// ProcessingFail            =   8: not used in API
+
+    // "Specific to lite ranging."
+    // should never occur with this lib (which uses low power auto ranging,
+    // as the API does)
+    XtalkSignalFail           =   9,
+
+    // "1st interrupt when starting ranging in back to back mode. Ignore
+    // data."
+    // should never occur with this lib
+    SynchronizationInt         =  10, // (the API spells this "syncronisation")
+
+    // "All Range ok but object is result of multiple pulses merging together.
+    // Used by RQL for merged pulse detection"
+// RangeValid MergedPulse    =  11: not used in API
+
+    // "Used by RQL as different to phase fail."
+// TargetPresentLackOfSignal =  12:
+
+    // "Target is below minimum detection threshold."
+    MinRangeFail              =  13,
+
+    // "The reported range is invalid"
+// RangeInvalid              =  14: can't actually be returned by API (range can never become negative, even after correction)
+
+    // "No Update."
+    None                      = 255,
+};
+
+typedef struct ResultBuffer_
+{
+    uint8_t range_status; 
+    uint8_t stream_count;
+    uint16_t dss_actual_effective_spads_sd0;
+    uint16_t ambient_count_rate_mcps_sd0;
+    uint16_t final_crosstalk_corrected_range_mm_sd0;
+    uint16_t peak_signal_count_rate_crosstalk_corrected_mcps_sd0;
+}ResultBuffer;
+
+typedef struct RangingData_
+{
+    uint16_t range_mm;
+    enum RangeStatus range_status;
+    float peak_signal_count_rate_MCPS;
+    float ambient_count_rate_MCPS;
+}RangingData;
+
 int fd;
 uint16_t fast_osc_frequency, osc_calibrate_val;
 uint16_t timeout_start_ms;
+ResultBuffer results;
+RangingData ranging_data;
 
 void writeReg(uint16_t reg, uint8_t value)
 {
@@ -197,6 +279,8 @@ uint16_t encodeTimeout(uint32_t timeout_mclks)
     else { return 0; }
 }
 
+float countRateFixedToFloat(uint16_t count_rate_fixed) { return (float)count_rate_fixed / (1 << 7); }
+
 uint32_t getMeasurementTimingBudget()
 {
     uint32_t macro_period_us = calcMacroPeriod(readReg(RANGE_CONFIG__VCSEL_PERIOD_A));
@@ -302,6 +386,179 @@ int setDistanceMode(enum DistanceMode mode)
     return 1;
 }
 
+void startContinuous(uint32_t period_ms)
+{
+    // from VL53L1_set_inter_measurement_period_ms()
+    writeReg32Bit(SYSTEM__INTERMEASUREMENT_PERIOD, period_ms * osc_calibrate_val);
+
+    writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
+    writeReg(SYSTEM__MODE_START, 0x40); // mode_range__timed
+}
+
+void readResults()
+{
+    uint8_t buf[2], data[17];
+    buf[0] = (RESULT__RANGE_STATUS >> 8) & 0xFF;
+    buf[1] = RESULT__RANGE_STATUS & 0xFF;
+    write(fd, buf, 2);
+    read(fd, data, 17);
+    
+    //2, 6, 7, 10, 11, 12, 13번째 데이터는 사용 안함
+    results.range_status = buf[0];
+    results.stream_count = buf[2];
+    results.dss_actual_effective_spads_sd0 = (uint16_t)buf[4] << 8;
+    results.dss_actual_effective_spads_sd0 += buf[5];
+
+    results.ambient_count_rate_mcps_sd0 = (uint16_t)buf[8] << 8;
+    results.ambient_count_rate_mcps_sd0 += buf[9];
+
+    results.final_crosstalk_corrected_range_mm_sd0 = (uint16_t)buf[13] << 8;
+    results.final_crosstalk_corrected_range_mm_sd0 += buf[14];
+
+    results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 = (uint16_t)buf[15] << 8;
+    results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 = buf[16];
+}
+
+void updateDSS()
+{
+    uint16_t spadCount = results.dss_actual_effective_spads_sd0;
+
+    if (spadCount != 0)
+    {
+        // "Calc total rate per spad"
+
+        uint32_t totalRatePerSpad =
+        (uint32_t)results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 +
+        results.ambient_count_rate_mcps_sd0;
+
+        // "clip to 16 bits"
+        if (totalRatePerSpad > 0xFFFF) { totalRatePerSpad = 0xFFFF; }
+
+        // "shift up to take advantage of 32 bits"
+        totalRatePerSpad <<= 16;
+
+        totalRatePerSpad /= spadCount;
+
+        if (totalRatePerSpad != 0)
+        {
+            // "get the target rate and shift up by 16"
+            uint32_t requiredSpads = ((uint32_t)0x0A00 << 16) / totalRatePerSpad;
+
+            // "clip to 16 bit"
+            if (requiredSpads > 0xFFFF) { requiredSpads = 0xFFFF; }
+
+            // "override DSS config"
+            writeReg16Bit(DSS_CONFIG__MANUAL_EFFECTIVE_SPADS_SELECT, requiredSpads);
+            // DSS_CONFIG__ROI_MODE_CONTROL should already be set to REQUESTED_EFFFECTIVE_SPADS
+
+            return;
+        }
+    }
+    // If we reached this point, it means something above would have resulted in a
+    // divide by zero.
+    // "We want to gracefully set a spad target, not just exit with an error"
+
+    // "set target to mid point"
+    writeReg16Bit(DSS_CONFIG__MANUAL_EFFECTIVE_SPADS_SELECT, 0x8000);
+}
+
+void getRangingData()
+{
+    // VL53L1_copy_sys_and_core_results_to_range_results() begin
+
+    uint16_t range = results.final_crosstalk_corrected_range_mm_sd0;
+
+    // "apply correction gain"
+    // gain factor of 2011 is tuning parm default (VL53L1_TUNINGPARM_LITE_RANGING_GAIN_FACTOR_DEFAULT)
+    // Basically, this appears to scale the result by 2011/2048, or about 98%
+    // (with the 1024 added for proper rounding).
+    ranging_data.range_mm = ((uint32_t)range * 2011 + 0x0400) / 0x0800;
+
+    // VL53L1_copy_sys_and_core_results_to_range_results() end
+
+    // set range_status in ranging_data based on value of RESULT__RANGE_STATUS register
+    // mostly based on ConvertStatusLite()
+    switch(results.range_status)
+    {
+        case 17: // MULTCLIPFAIL
+        case 2: // VCSELWATCHDOGTESTFAILURE
+        case 1: // VCSELCONTINUITYTESTFAILURE
+        case 3: // NOVHVVALUEFOUND
+        // from SetSimpleData()
+        ranging_data.range_status = HardwareFail;
+        break;
+
+        case 13: // USERROICLIP
+        // from SetSimpleData()
+        ranging_data.range_status = MinRangeFail;
+        break;
+
+        case 18: // GPHSTREAMCOUNT0READY
+        ranging_data.range_status = SynchronizationInt;
+        break;
+
+        case 5: // RANGEPHASECHECK
+        ranging_data.range_status =  OutOfBoundsFail;
+        break;
+
+        case 4: // MSRCNOTARGET
+        ranging_data.range_status = SignalFail;
+        break;
+
+        case 6: // SIGMATHRESHOLDCHECK
+        ranging_data.range_status = SignalFail;
+        break;
+
+        case 7: // PHASECONSISTENCY
+        ranging_data.range_status = WrapTargetFail;
+        break;
+
+        case 12: // RANGEIGNORETHRESHOLD
+        ranging_data.range_status = XtalkSignalFail;
+        break;
+
+        case 8: // MINCLIP
+        ranging_data.range_status = RangeValidMinRangeClipped;
+        break;
+
+        case 9: // RANGECOMPLETE
+        // from VL53L1_copy_sys_and_core_results_to_range_results()
+        if (results.stream_count == 0)
+        {
+            ranging_data.range_status = RangeValidNoWrapCheckFail;
+        }
+        else
+        {
+            ranging_data.range_status = RangeValid;
+        }
+        break;
+
+        default:
+        ranging_data.range_status = None;
+    }
+
+    // from SetSimpleData()
+    ranging_data.peak_signal_count_rate_MCPS =
+        countRateFixedToFloat(results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0);
+    ranging_data.ambient_count_rate_MCPS =
+        countRateFixedToFloat(results.ambient_count_rate_mcps_sd0);
+}
+
+
+uint16_t readmm()
+{
+    readResults();
+
+    updateDSS();
+
+    getRangingData();
+
+    writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
+
+    return ranging_data.range_mm;
+}
+
+
 int Init(int io_2v8)
 {
     if (readReg16Bit(IDENTIFICATION__MODEL_ID) != 0xEACC) { return 0; }
@@ -372,8 +629,21 @@ int main(int argc, char *argv[])
         printf("Failed to open i2c-0");
         exit(1);
     }
-    if(ioctl(fd, I2C_SLAVE, I2C_ADDRESS) < 0) {
+    if(ioctl(fd, I2C_SLAVE, VL53L1X_I2C_ADDRESS) < 0) {
         perror("Failed to acquire bus access and/or talk to slave\n");
         exit(1);
+    }
+    if(Init(0) <= 0) {
+        printf("Failed to detect and initialize sensor!\n");
+        exit(1);
+    }
+    setDistanceMode(Long);
+    setMeasurementTimingBudget(50000);
+
+    startContinuous(50);    //50ms 마다 측정
+
+    while(1) {
+        printf("Range: %d\n", readmm());
+        usleep(100000);
     }
 }
