@@ -167,7 +167,7 @@ void writeReg16Bit(uint16_t reg, uint16_t value)
 
 void writeReg32Bit(uint16_t reg, uint32_t value)
 {
-    uint8_t buf[4];
+    uint8_t buf[6];
     buf[0] = (reg >> 8) & 0xFF;
     buf[1] = reg & 0xFF;
     buf[2] = (value >> 24) & 0xFF;
@@ -388,10 +388,12 @@ int setDistanceMode(enum DistanceMode mode)
 
 void startContinuous(uint32_t period_ms)
 {
+    printf("1\n");
     // from VL53L1_set_inter_measurement_period_ms()
     writeReg32Bit(SYSTEM__INTERMEASUREMENT_PERIOD, period_ms * osc_calibrate_val);
-
+    printf("2\n");
     writeReg(SYSTEM__INTERRUPT_CLEAR, 0x01); // sys_interrupt_clear_range
+    printf("3\n");
     writeReg(SYSTEM__MODE_START, 0x40); // mode_range__timed
 }
 
@@ -638,12 +640,15 @@ int main(int argc, char *argv[])
         exit(1);
     }
     setDistanceMode(Long);
+    
     setMeasurementTimingBudget(50000);
 
     startContinuous(50);    //50ms 마다 측정
-
     while(1) {
         printf("Range: %d\n", readmm());
         usleep(100000);
     }
+    
+
+    return 0;
 }
