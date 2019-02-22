@@ -91,7 +91,7 @@ typedef struct _Accel_Gyro_Temp
     int x_gyro;
     int y_gyro;
     int z_gyro;
-    int temp;
+    double temp;
 } Accel_Gyro_Temp;
 
 
@@ -131,35 +131,38 @@ unsigned long millis() {
 }
 
 void set_last_read_angle_data(unsigned long t, float x, float y, float z, float x_gyro, float y_gyro, float z_gyro) {
-  last_read_time = t;
-  lastXAngle = x;
-  lastYAngle = y;
-  lastZAngle = z;
-  last_gyro_x_angle = x_gyro;
-  last_gyro_y_angle = y_gyro;
-  last_gyro_z_angle = z_gyro;
+    last_read_time = t;
+    lastXAngle = x;
+    lastYAngle = y;
+    lastZAngle = z;
+    last_gyro_x_angle = x_gyro;
+    last_gyro_y_angle = y_gyro;
+    last_gyro_z_angle = z_gyro;
 }
 
 void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
     uint8_t buf[14];
+    uint16_t raw_temp;
     ReadData(ICM20948_ACCEL_XOUT_H, buf, 14);
 
-    data->x_accel = buf[0];
+    data->x_accel = buf[0] << 8;
     data->x_accel += buf[1];
-    data->y_accel = buf[2];
+    data->y_accel = buf[2] << 8;
     data->y_accel += buf[3];
-    data->z_accel = buf[4];
+    data->z_accel = buf[4] << 8;
     data->z_accel += buf[5];
 
-    data->x_gyro = buf[6];
+    data->x_gyro = buf[6] << 8;
     data->x_gyro += buf[7];
-    data->y_gyro = buf[8];
+    data->y_gyro = buf[8] << 8;
     data->y_gyro += buf[9];
-    data->z_gyro = buf[10];
+    data->z_gyro = buf[10] << 8;
     data->z_gyro += buf[11];
 
-    data->temp = buf[12];
-    data->temp = buf[13];
+    raw_temp = buf[12] << 8;
+    raw_temp += buf[13];
+
+    data->temp = (double)(raw_temp /337.87) + 21.0;
 }
 
 void INIT() {
@@ -198,19 +201,13 @@ void calibrateSensor(Accel_Gyro_Temp *data) {
         z_gyro += data->z_gyro;
         usleep(100000);
     }
-    x_accel /= 10;
-    y_accel /= 10;
-    z_accel /= 10;
-    x_gyro /= 10;
-    y_gyro /= 10;
-    z_gyro /= 10;
 
-    data->x_accel = x_accel;
-    data->y_accel = y_accel;
-    data->z_accel = z_accel;
-    data->x_gyro = x_gyro;
-    data->y_gyro = y_gyro;
-    data->z_gyro = z_gyro;
+    data->x_accel = x_accel / 10;
+    data->y_accel = y_accel / 10;
+    data->z_accel = z_accel / 10;
+    data->x_gyro = x_gyro / 10;
+    data->y_gyro = y_gyro / 10;
+    data->z_gyro = z_gyro / 10;
 }
 
 int main(int argc, char *argv[]) 
@@ -228,7 +225,7 @@ int main(int argc, char *argv[])
     }
     INIT();
     calibrateSensor(&base);
-    set_last_read_angle_data(0, 0, 0, 0, 0, 0, 0);
+    set_last_read_angle_data(millis(), 0, 0, 0, 0, 0, 0);
 
     while(1) {
         Accel_Gyro_Temp data;
@@ -251,7 +248,9 @@ int main(int argc, char *argv[])
         double unfilteredGyroAngleX = gyroX * dt + lastXAngle;
         double unfilteredGyroAngleY = gyroY * dt + lastYAngle;
         double unfilteredGyroAngleZ = gyroZ * dt + lastZAngle;
-
+        //================================================================
+        //가속도 부분
+        //================================================================
         //가속도로 각도 구하기
         double accelX = data.x_accel;
         double accelY = data.y_accel;
@@ -259,6 +258,8 @@ int main(int argc, char *argv[])
 
         //라디안
         double RADIANS_TO_DEGREES = 180/3.14159;
+
+        //가속도 구하는 식 Z축은 고정
         double accelAngleY = atan(-1*accelX/sqrt(pow(accelY,2) + pow(accelZ,2)))*RADIANS_TO_DEGREES;
         double accelAngleX = atan(accelY/sqrt(pow(accelX,2) + pow(accelZ,2)))*RADIANS_TO_DEGREES;
 
@@ -271,9 +272,15 @@ int main(int argc, char *argv[])
         double angleZ = gyroAngleZ;
 
         set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
-
-//        printf("Accel: %.2lf, %.2lf, %.2lf\tGyro: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ, gyroAngleX, gyroAngleY, gyroAngleZ);
-        printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
+        
+        //printf("%lf %lf %lf\n", angleX, angleY, angleZ);
+        //printf("%d %d %d\n", data.x_accel, data.y_accel, data.z_accel);
+        //printf("%d %d %d\n", data.x_gyro, data.y_gyro, data.z_gyro);
+        printf("Temp: %lf\n", data.temp);
+        printf("Accel: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ);
+        //printf("Accel: %.2lf, %.2lf, %.2lf\tGyro: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ, gyroAngleX, gyroAngleY, gyroAngleZ);
+        //printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
+        //printf("%lf\n", dt);
 
         usleep(100000);
     }

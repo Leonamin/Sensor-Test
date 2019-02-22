@@ -299,18 +299,11 @@ void setup() {
     Serial.print(c,HEX);
     Serial.print("ERROR : ");
     Serial.println(error, DEC);
-
-    calibrate_sensors();
-    
     //sleep 비트 0으로 클리어하여 센서 동작 시작
     error = ICM20948_write_reg(ICM20948_PWR_MGMT_1, 0);
-    for(int i = 0; i < 10; i++) {
-      ICM20948_read (ICM20948_GYRO_XOUT_H, &c, 1);
-      Serial.println((uint32_t)c<<8);
-      ICM20948_read (ICM20948_GYRO_XOUT_L, &c, 1);
-      Serial.println(c);
-      delay(100);
-    }
+    calibrate_sensors();
+    set_last_read_angle_data(millis(), 0, 0, 0, 0, 0, 0);
+
 }
 
 void loop() {
@@ -364,8 +357,17 @@ void loop() {
     float angle_z = gyro_angle_z;
     
     set_last_read_angle_data(t_now, angle_x, angle_y, angle_z, unfiltered_gyro_angle_x, unfiltered_gyro_angle_y, unfiltered_gyro_angle_z);
- 
-    
+
+    //Serial.println(t_now - get_last_time());
+    /*
+    Serial.print(accel_t_gyro.value.x_gyro);
+    Serial.print("\t");
+    Serial.print(accel_t_gyro.value.y_gyro);
+    Serial.print("\t");
+    Serial.print(accel_t_gyro.value.z_gyro);
+    Serial.print("\n");
+    delay(100);
+    */
     Serial.print("Accel X, Y, Z: \t");
     Serial.print(accel_angle_x);
     Serial.print("\t");
@@ -375,14 +377,16 @@ void loop() {
     Serial.println();
     Serial.println();
     delay(100);
+    
     /*
     Serial.print("Angle X, Y, Z: \t");
-    Serial.print(accel_x);
+    Serial.print(angle_x);
     Serial.print("\t");
-    Serial.print(accel_y);
+    Serial.print(angle_y);
     Serial.print("\t");
-    Serial.print(accel_z);
+    Serial.print(angle_z);
     Serial.println();
     delay(100);
     */
+    
 }
