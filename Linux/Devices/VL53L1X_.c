@@ -406,19 +406,23 @@ void readResults()
     read(fd, data, 17);
     
     //2, 6, 7, 10, 11, 12, 13번째 데이터는 사용 안함
-    results.range_status = buf[0];
-    results.stream_count = buf[2];
-    results.dss_actual_effective_spads_sd0 = (uint16_t)buf[4] << 8;
-    results.dss_actual_effective_spads_sd0 += buf[5];
-
-    results.ambient_count_rate_mcps_sd0 = (uint16_t)buf[8] << 8;
-    results.ambient_count_rate_mcps_sd0 += buf[9];
-
-    results.final_crosstalk_corrected_range_mm_sd0 = (uint16_t)buf[13] << 8;
-    results.final_crosstalk_corrected_range_mm_sd0 += buf[14];
-
-    results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 = (uint16_t)buf[15] << 8;
-    results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 = buf[16];
+    results.range_status = data[0];
+    //buf[1]
+    results.stream_count = data[2];
+    results.dss_actual_effective_spads_sd0 = (uint16_t)data[3] << 8;
+    results.dss_actual_effective_spads_sd0 |= data[4];
+    //buf[5]
+    //buf[6]
+    results.ambient_count_rate_mcps_sd0 = (uint16_t)data[7] << 8;
+    results.ambient_count_rate_mcps_sd0 |= data[8];
+    //buf[9]
+    //buf[10]
+    //buf[11]
+    //buf[12]
+    results.final_crosstalk_corrected_range_mm_sd0 = (uint16_t)data[13] << 8;
+    results.final_crosstalk_corrected_range_mm_sd0 |= data[14];
+    results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 = (uint16_t)data[15] << 8;
+    results.peak_signal_count_rate_crosstalk_corrected_mcps_sd0 |= data[16];
 }
 
 void updateDSS()
@@ -639,6 +643,7 @@ int main(int argc, char *argv[])
         printf("Failed to detect and initialize sensor!\n");
         exit(1);
     }
+
     setDistanceMode(Long);
     
     setMeasurementTimingBudget(50000);
