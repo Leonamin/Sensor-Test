@@ -85,12 +85,12 @@
 typedef struct _Accel_Gyro_Temp
 {
     /* data */
-    int x_accel;
-    int y_accel;
-    int z_accel;
-    int x_gyro;
-    int y_gyro;
-    int z_gyro;
+    int16_t x_accel;
+    int16_t y_accel;
+    int16_t z_accel;
+    int16_t x_gyro;
+    int16_t y_gyro;
+    int16_t z_gyro;
     double temp;
 } Accel_Gyro_Temp;
 
@@ -142,7 +142,7 @@ void set_last_read_angle_data(unsigned long t, float x, float y, float z, float 
 
 void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
     uint8_t buf[14];
-    uint16_t raw_temp;
+    int raw_temp;
     ReadData(ICM20948_ACCEL_XOUT_H, buf, 14);
 
     data->x_accel = buf[0] << 8;
@@ -273,11 +273,12 @@ int main(int argc, char *argv[])
 
         set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
         
-        //printf("%lf %lf %lf\n", angleX, angleY, angleZ);
+        printf("%lf %lf %lf\n", angleX, angleY, angleZ);
         //printf("%d %d %d\n", data.x_accel, data.y_accel, data.z_accel);
         //printf("%d %d %d\n", data.x_gyro, data.y_gyro, data.z_gyro);
-        printf("Temp: %lf\n", data.temp);
-        printf("Accel: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ);
+        //printf("Temp: %lf\n", data.temp);
+        //printf("dt: %lf\n", dt);
+        //printf("Accel: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ);
         //printf("Accel: %.2lf, %.2lf, %.2lf\tGyro: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ, gyroAngleX, gyroAngleY, gyroAngleZ);
         //printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
         //printf("%lf\n", dt);

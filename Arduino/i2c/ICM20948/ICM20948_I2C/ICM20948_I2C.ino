@@ -368,6 +368,7 @@ void loop() {
     Serial.print("\n");
     delay(100);
     */
+   /*
     Serial.print("Accel X, Y, Z: \t");
     Serial.print(accel_angle_x);
     Serial.print("\t");
@@ -375,9 +376,18 @@ void loop() {
     Serial.print("\t");
     Serial.print(accel_angle_z);
     Serial.println();
+    Serial.print(dt);
     Serial.println();
     delay(100);
-    
+    */
+
+    Serial.print(accel_t_gyro.value.x_accel);
+    Serial.print("\t");
+    Serial.print(accel_t_gyro.value.y_accel);
+    Serial.print("\t");
+    Serial.print(accel_t_gyro.value.z_accel);
+    Serial.print("\n");
+    delay(100);
     /*
     Serial.print("Angle X, Y, Z: \t");
     Serial.print(angle_x);
