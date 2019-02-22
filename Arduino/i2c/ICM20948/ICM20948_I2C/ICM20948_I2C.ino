@@ -304,9 +304,18 @@ void setup() {
     
     //sleep 비트 0으로 클리어하여 센서 동작 시작
     error = ICM20948_write_reg(ICM20948_PWR_MGMT_1, 0);
+    for(int i = 0; i < 10; i++) {
+      ICM20948_read (ICM20948_GYRO_XOUT_H, &c, 1);
+      Serial.println((uint32_t)c<<8);
+      ICM20948_read (ICM20948_GYRO_XOUT_L, &c, 1);
+      Serial.println(c);
+      delay(100);
+    }
 }
 
 void loop() {
+
+  
     int error;
     double dT;
     accel_t_gyro_union accel_t_gyro;
@@ -356,7 +365,7 @@ void loop() {
     
     set_last_read_angle_data(t_now, angle_x, angle_y, angle_z, unfiltered_gyro_angle_x, unfiltered_gyro_angle_y, unfiltered_gyro_angle_z);
  
-    /*
+    
     Serial.print("Accel X, Y, Z: \t");
     Serial.print(accel_angle_x);
     Serial.print("\t");
@@ -365,7 +374,8 @@ void loop() {
     Serial.print(accel_angle_z);
     Serial.println();
     Serial.println();
-    */
+    delay(100);
+    /*
     Serial.print("Angle X, Y, Z: \t");
     Serial.print(accel_x);
     Serial.print("\t");
@@ -374,4 +384,5 @@ void loop() {
     Serial.print(accel_z);
     Serial.println();
     delay(100);
+    */
 }

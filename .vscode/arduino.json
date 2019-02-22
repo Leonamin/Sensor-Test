@@ -1,0 +1,6 @@
+{
+    "board": "arduino:avr:mega",
+    "configuration": "cpu=atmega2560",
+    "sketch": "Arduino/i2c/ICM20948/ICM20948_I2C/ICM20948_I2C.ino",
+    "port": "/dev/ttyUSB1"
+}

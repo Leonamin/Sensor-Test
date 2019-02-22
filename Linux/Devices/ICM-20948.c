@@ -7,6 +7,8 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <math.h>
 
 #define ICM20948_WHO_AM_I               0x00    //R
 #define ICM20948_USER_CtRL              0x03    //R/W
@@ -94,6 +96,14 @@ typedef struct _Accel_Gyro_Temp
 
 
 int fd;
+unsigned long last_read_time;
+float         lastXAngle;  // These are the filtered angles
+float         lastYAngle;
+float         lastZAngle;  
+float         last_gyro_x_angle;  // Store the gyro angles to compare drift
+float         last_gyro_y_angle;
+float         last_gyro_z_angle;
+
 
 int WriteData(uint8_t reg_addr, uint8_t *data, int size) {
     uint8_t *buf;
@@ -113,56 +123,43 @@ int ReadData(uint8_t reg_addr, uint8_t *data, int size) {
     return 1;
 }
 
+unsigned long millis() {
+    struct timeval te; 
+    gettimeofday(&te, NULL); // 현재 시간 얻어오기
+    unsigned long milliseconds = te.tv_sec*1000LL + te.tv_usec/1000; // 밀리세컨드 계산
+    return milliseconds;
+}
+
+void set_last_read_angle_data(unsigned long t, float x, float y, float z, float x_gyro, float y_gyro, float z_gyro) {
+  last_read_time = t;
+  lastXAngle = x;
+  lastYAngle = y;
+  lastZAngle = z;
+  last_gyro_x_angle = x_gyro;
+  last_gyro_y_angle = y_gyro;
+  last_gyro_z_angle = z_gyro;
+}
+
 void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
-    uint8_t temp;
-    
-    data->x_accel = 0;
-    data->y_accel = 0;
-    data->z_accel = 0;
-    data->x_gyro = 0;
-    data->y_gyro = 0;
-    data->z_gyro = 0;
-    data->temp = 0;
+    uint8_t buf[14];
+    ReadData(ICM20948_ACCEL_XOUT_H, buf, 14);
 
-    ReadData(ICM20948_ACCEL_XOUT_H, &temp, 1);
-    data->x_accel += (int)temp << 8;
-    ReadData(ICM20948_ACCEL_XOUT_L, &temp, 1);
-    data->x_accel += (int)temp;
-    ReadData(ICM20948_ACCEL_YOUT_H, &temp, 1);
-    data->y_accel += (int)temp << 8;
-    ReadData(ICM20948_ACCEL_YOUT_L, &temp, 1);
-    data->y_accel += (int)temp;
-    ReadData(ICM20948_ACCEL_ZOUT_H, &temp, 1);
-    data->z_accel += (int)temp << 8;
-    ReadData(ICM20948_ACCEL_ZOUT_L, &temp, 1);
-    data->z_accel += (int)temp;
+    data->x_accel = buf[0];
+    data->x_accel += buf[1];
+    data->y_accel = buf[2];
+    data->y_accel += buf[3];
+    data->z_accel = buf[4];
+    data->z_accel += buf[5];
 
-    ReadData(ICM20948_GYRO_XOUT_H, &temp, 1);
-    data->x_gyro += (int)temp << 8;
-    ReadData(ICM20948_GYRO_XOUT_L, &temp, 1);
-    data->x_gyro += (int)temp;
-    ReadData(ICM20948_GYRO_YOUT_H, &temp, 1);
-    data->y_gyro += (int)temp << 8;
-    ReadData(ICM20948_GYRO_YOUT_L, &temp, 1);
-    data->y_gyro += (int)temp;
-    ReadData(ICM20948_GYRO_ZOUT_H, &temp, 1);
-    data->z_gyro += (int)temp << 8;
-    ReadData(ICM20948_GYRO_ZOUT_L, &temp, 1);
-    data->z_gyro += (int)temp;
-    
-    ReadData(ICM20948_TEMP_OUT_H, &temp, 1);
-    data->temp += (int)temp << 8;
-    ReadData(ICM20948_TEMP_OUT_L, &temp, 1);
-    data->temp += (int)temp;
-    
-    
+    data->x_gyro = buf[6];
+    data->x_gyro += buf[7];
+    data->y_gyro = buf[8];
+    data->y_gyro += buf[9];
+    data->z_gyro = buf[10];
+    data->z_gyro += buf[11];
 
-
-    /*
-    for(int i = 0; i < 14; i++) {
-        printf("%6d\t", buf[i]);
-    }
-    */
+    data->temp = buf[12];
+    data->temp = buf[13];
 }
 
 void INIT() {
@@ -218,8 +215,8 @@ void calibrateSensor(Accel_Gyro_Temp *data) {
 
 int main(int argc, char *argv[]) 
 {
-    Accel_Gyro_Temp data;
     Accel_Gyro_Temp base;
+    
 
     if((fd = open(argv[1], O_RDWR)) < 0) {
         printf("Failed to open i2c-0");
@@ -231,19 +228,56 @@ int main(int argc, char *argv[])
     }
     INIT();
     calibrateSensor(&base);
+    set_last_read_angle_data(0, 0, 0, 0, 0, 0, 0);
+
     while(1) {
+        Accel_Gyro_Temp data;
         ReadAccelGyroTemp(&data);
-        printf("Accel X: %6d, Y: %6d, Z: %6d\tGyro X: %6d, Y: %6d, Z: %6d\tTemp: %d\n", data.x_accel, data.y_accel, data.z_accel, data.x_gyro, data.y_gyro, data.z_gyro, data.temp);
-        /*
-        double FS_SEL = 131;
+        unsigned int t_now = millis();
+
+        //각속도 구하기
+        double FS_SEL = 131;            //풀스케일값
         double gyroX = (data.x_gyro - base.x_gyro) / FS_SEL;
         double gyroY = (data.y_gyro - base.y_gyro) / FS_SEL;
         double gyroZ = (data.z_gyro - base.z_gyro) / FS_SEL;
         
-        printf("Gyro X: %6.3lf,Y: %6.3lf,Z: %6.3lf\n", gyroX, gyroY, gyroZ);
-        */
+        //보정된 자이로 각
+        double dt = (t_now - last_read_time) / 1000.0;
+        double gyroAngleX = gyroX * dt + lastXAngle;
+        double gyroAngleY = gyroY * dt + lastYAngle;
+        double gyroAngleZ = gyroZ * dt + lastZAngle;
+        
+        //보정되지 않은 자이로 각
+        double unfilteredGyroAngleX = gyroX * dt + lastXAngle;
+        double unfilteredGyroAngleY = gyroY * dt + lastYAngle;
+        double unfilteredGyroAngleZ = gyroZ * dt + lastZAngle;
+
+        //가속도로 각도 구하기
+        double accelX = data.x_accel;
+        double accelY = data.y_accel;
+        double accelZ = data.z_accel;
+
+        //라디안
+        double RADIANS_TO_DEGREES = 180/3.14159;
+        double accelAngleY = atan(-1*accelX/sqrt(pow(accelY,2) + pow(accelZ,2)))*RADIANS_TO_DEGREES;
+        double accelAngleX = atan(accelY/sqrt(pow(accelX,2) + pow(accelZ,2)))*RADIANS_TO_DEGREES;
+
+        double accelAngleZ = 0;
+
+        //상보필터
+        double alpha = 0.96;
+        double angleX = alpha*gyroAngleX + (1.0 - alpha)*accelAngleX;
+        double angleY = alpha*gyroAngleY + (1.0 - alpha)*accelAngleY;
+        double angleZ = gyroAngleZ;
+
+        set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
+
+//        printf("Accel: %.2lf, %.2lf, %.2lf\tGyro: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ, gyroAngleX, gyroAngleY, gyroAngleZ);
+        printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
+
         usleep(100000);
     }
+
 
     return 0;
 }
