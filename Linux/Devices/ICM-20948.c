@@ -76,6 +76,11 @@
 #define ICM20948_RIFO_CFG               0x76                    
 #define ICM20948_REG_BANK_SEL           0x7F
 
+#define USR_BANK_0                      0x00
+#define USR_BANK_1                      0x10
+#define USR_BANK_2                      0x20
+#define USR_BANK_3                      0x30
+
 //AD0 핀이 low일 경우 I2C slave 주소는 0x68
 //AD0 핀이 high일 경우 I2C slvae 주소는 0x69가 된다.  
 #define ICM20948_I2C_ADDRESS            0x68
@@ -94,15 +99,14 @@ typedef struct _Accel_Gyro_Temp
     double temp;
 } Accel_Gyro_Temp;
 
-
 int fd;
 unsigned long last_read_time;
 float         lastXAngle;  // These are the filtered angles
 float         lastYAngle;
 float         lastZAngle;  
-float         last_gyro_x_angle;  // Store the gyro angles to compare drift
-float         last_gyro_y_angle;
-float         last_gyro_z_angle;
+float         lastGyroX;  // Store the gyro angles to compare drift
+float         lastGyroY;
+float         lastGyroZ;
 
 
 int WriteData(uint8_t reg_addr, uint8_t *data, int size) {
@@ -140,9 +144,9 @@ void set_last_read_angle_data(unsigned long t, float x, float y, float z, float 
     lastXAngle = x;
     lastYAngle = y;
     lastZAngle = z;
-    last_gyro_x_angle = x_gyro;
-    last_gyro_y_angle = y_gyro;
-    last_gyro_z_angle = z_gyro;
+    lastGyroX = x_gyro;
+    lastGyroY = y_gyro;
+    lastGyroZ = z_gyro;
 }
 
 void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
@@ -172,46 +176,42 @@ void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
 
 void i2c_Mag_write(uint8_t reg,uint8_t value)
 {
-    WriteDataReg(0x7F, 0x30);
+    WriteDataReg(ICM20948_REG_BANK_SEL, 0x30);
 
-  	usleep(1000);
+  	// usleep(1000);
   	WriteDataReg(0x03 ,0x0C);//mode: write
 
-  	usleep(1000);
+  	// usleep(1000);
   	WriteDataReg(0x04 ,reg);//set reg addr
 
-  	usleep(1000);
+  	// usleep(1000);
   	WriteDataReg(0x06 ,value);//send value
 
-  	usleep(1000);
+  	// usleep(1000);
 
-    WriteDataReg(0x7F, 0x00);
+    WriteDataReg(ICM20948_REG_BANK_SEL, 0x00);
 }
 
-static uint8_t ICM_Mag_Read(uint8_t reg)
+uint8_t ICM_Mag_Read(uint8_t reg)
 {
   	uint8_t data;
-    data = 0x30;
-    WriteData(0x7F, &data, 1);      //유저랭크 3
-    usleep(1000);
+    
+    WriteDataReg(ICM20948_REG_BANK_SEL, USR_BANK_3);
+    // usleep(1000);
 
-    data = 0x8C;
-    WriteData(0x03, &data, 1);
-    usleep(1000);
+    WriteDataReg(0x03, 0x8C);           //I2C Slave0번 주소 read로 설정
+    // usleep(1000);
 
-    data = reg;
-    WriteData(0x04, &data, 1);
-    usleep(1000);
+    WriteDataReg(0x04, reg);            //I2C Slave0번 주소에서 읽으려는 레지스터 설정
+    // usleep(1000);
 
-    data = 0xff;
-    WriteData(0x06, &data, 1);
-    usleep(1000);
+    WriteDataReg(0x06, 0xFF);           //I2C SLV0 DO
+    // usleep(1000);
 
-    data = 0x00;
-    WriteData(0x7F, &data, 1);      //유저 랭크 0
-  	
-    ReadData(0x3B, &data, 1);
-    usleep(1000);
+    WriteDataReg(ICM20948_REG_BANK_SEL, 0x00);  //유저뱅크 0번
+
+    ReadData(ICM20948_EXT_SLV_SENS_DATA_00, &data, 1);           //EXT SLV SENS DATA 0번
+    // usleep(1000);
 
   	return data;
 }
@@ -219,21 +219,25 @@ static uint8_t ICM_Mag_Read(uint8_t reg)
 void ICM_ReadMag(int16_t magn[3]) {
 	uint8_t mag_buffer[10];
 
-	mag_buffer[0] =ICM_Mag_Read(0x01);
+	mag_buffer[0] = ICM_Mag_Read(0x01);
 
-	mag_buffer[1] =ICM_Mag_Read(0x11);
-	mag_buffer[2] =ICM_Mag_Read(0x12);
-	magn[0]=mag_buffer[1]|mag_buffer[2]<<8;
-	mag_buffer[3] =ICM_Mag_Read(0x13);
-	mag_buffer[4] =ICM_Mag_Read(0x14);
-	magn[1]=mag_buffer[3]|mag_buffer[4]<<8;
-	mag_buffer[5] =ICM_Mag_Read(0x15);
-	mag_buffer[6] =ICM_Mag_Read(0x16);
-	magn[2]=mag_buffer[5]|mag_buffer[6]<<8;
+	mag_buffer[1] = ICM_Mag_Read(0x11);
+	mag_buffer[2] = ICM_Mag_Read(0x12);
+
+	magn[0] = mag_buffer[1] | mag_buffer[2] << 8;
+	
+    mag_buffer[3] = ICM_Mag_Read(0x13);
+	mag_buffer[4] = ICM_Mag_Read(0x14);
+	
+    magn[1] = mag_buffer[3] | mag_buffer[4] << 8;
+	
+    mag_buffer[5] = ICM_Mag_Read(0x15);
+	mag_buffer[6] = ICM_Mag_Read(0x16);
+	
+    magn[2] = mag_buffer[5] | mag_buffer[6] << 8;
 
 	i2c_Mag_write(0x31,0x01);
 }
-
 
 void INIT() {
     uint8_t id, data;
@@ -249,10 +253,10 @@ void INIT() {
     WriteData(ICM20948_PWR_MGMT_2, &data, 1);       //자이로 가속도 모두 허용
     WriteData(ICM20948_PWR_MGMT_1, &data, 1);       //Sleep 모드 나오기
 
-    WriteDataReg(0x7F, 0x00); // Select user bank 0
+    WriteDataReg(ICM20948_REG_BANK_SEL, USR_BANK_0); // Select user bank 0
 	WriteDataReg(0x0F, 0x30); // INT Pin / Bypass Enable Configuration
 	WriteDataReg(0x03, 0x20); // I2C_MST_EN
-	WriteDataReg(0x7F, 0x30); // Select user bank 3
+	WriteDataReg(ICM20948_REG_BANK_SEL, USR_BANK_3); // Select user bank 3
 	WriteDataReg(0x01, 0x4D); // I2C Master mode and Speed 400 kHz
 	WriteDataReg(0x02, 0x01); // I2C_SLV0 _DLY_ enable
 	WriteDataReg(0x05, 0x81); // enable IIC	and EXT_SENS_DATA==1 Byte
@@ -280,8 +284,10 @@ void calibrateSensor(Accel_Gyro_Temp *data) {
         x_gyro += data->x_gyro;
         y_gyro += data->y_gyro;
         z_gyro += data->z_gyro;
+        // printf("%d %d %d\n", data->x_gyro, data->y_gyro, data->z_gyro);
         usleep(100000);
     }
+    // printf("%lf %lf %lf\n", x_gyro, y_gyro, z_gyro);
 
     data->x_accel = x_accel / 10;
     data->y_accel = y_accel / 10;
@@ -306,26 +312,16 @@ int main(int argc, char *argv[])
         exit(1);
     }
     INIT();
-    calibrateSensor(&base);
     set_last_read_angle_data(millis(), 0, 0, 0, 0, 0, 0);
-    data = 0x10;
-    WriteData(ICM20948_REG_BANK_SEL, &data, 1);
-    data = 0x00;
-    WriteData(0x01, &data, 1);
-    data = 0x00;
-    WriteData(0x02, &data, 1);
-    ReadData(0x01, &data, 1);
-    printf("GYRO Conf1 : %x\n", data);
-    ReadData(0x02, &data, 1);
-    printf("GYRO Conf2 : %x\n", data);
-    ReadData(0x14, &data, 1);
-    // printf("ACCEL Conf1 : %x\n", data);
-    // ReadData(0x15, &data, 1);
-    // printf("ACCEL Conf2 : %x\n", data);
 
-    data = 0x00;
-    WriteData(ICM20948_REG_BANK_SEL, &data, 1);
+    WriteDataReg(ICM20948_REG_BANK_SEL, USR_BANK_2);
 
+    WriteDataReg(0x01, 0x29);
+
+    WriteDataReg(ICM20948_REG_BANK_SEL, USR_BANK_0);
+
+    calibrateSensor(&base);
+    // printf("%d %d %d\n", base.x_gyro, base.y_gyro, base.z_gyro);
     while(1) {
         Accel_Gyro_Temp data;
         ReadAccelGyroTemp(&data);
@@ -373,11 +369,12 @@ int main(int argc, char *argv[])
         set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
         
         ICM_ReadMag(magn);
-        printf("Magnetic X: %d, Y: %d, Z: %d\n", magn[0], magn[1], magn[2]);
 
-        //printf("%lf %lf %lf\n", angleX, angleY, angleZ);
+        printf("Magnetic X: %d, Y: %d, Z: %d\n", magn[0], magn[1], magn[2]);
+        //printf("Gyro Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", gyroAngleX, gyroAngleY, gyroAngleZ);
+        //printf("Angle: %.2lf %.2lf %.2lf\n", angleX, angleY, angleZ);
         //printf("%d %d %d\n", data.x_accel, data.y_accel, data.z_accel);
-        //printf("%d %d %d\n", data.x_gyro, data.y_gyro, data.z_gyro);
+        //printf("Gyro raw data: %d %d %d\n", data.x_gyro, data.y_gyro, data.z_gyro);
         //printf("Temp: %lf\n", data.temp);
         //printf("dt: %lf\n", dt);
         //printf("Accel: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ);
@@ -385,7 +382,7 @@ int main(int argc, char *argv[])
         //printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
         //printf("%lf\n", dt);
 
-        usleep(1000000);
+        //usleep(10000);
     }
 
 
