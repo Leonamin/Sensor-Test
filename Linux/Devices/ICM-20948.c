@@ -116,6 +116,11 @@ int WriteData(uint8_t reg_addr, uint8_t *data, int size) {
     return 1;
 }
 
+void WriteDataReg(uint8_t reg_addr, uint8_t data) {
+    uint8_t _data = data;
+    WriteData(reg_addr, &_data, 1);
+}
+
 int ReadData(uint8_t reg_addr, uint8_t *data, int size) {
     write(fd, &reg_addr, 1);
     read(fd, data, size);
@@ -165,16 +170,92 @@ void ReadAccelGyroTemp(Accel_Gyro_Temp *data) {
     data->temp = (double)(raw_temp /337.87) + 21.0;
 }
 
+void i2c_Mag_write(uint8_t reg,uint8_t value)
+{
+    WriteDataReg(0x7F, 0x30);
+
+  	usleep(1000);
+  	WriteDataReg(0x03 ,0x0C);//mode: write
+
+  	usleep(1000);
+  	WriteDataReg(0x04 ,reg);//set reg addr
+
+  	usleep(1000);
+  	WriteDataReg(0x06 ,value);//send value
+
+  	usleep(1000);
+
+    WriteDataReg(0x7F, 0x00);
+}
+
+static uint8_t ICM_Mag_Read(uint8_t reg)
+{
+  	uint8_t data;
+    data = 0x30;
+    WriteData(0x7F, &data, 1);      //유저랭크 3
+    usleep(1000);
+
+    data = 0x8C;
+    WriteData(0x03, &data, 1);
+    usleep(1000);
+
+    data = reg;
+    WriteData(0x04, &data, 1);
+    usleep(1000);
+
+    data = 0xff;
+    WriteData(0x06, &data, 1);
+    usleep(1000);
+
+    data = 0x00;
+    WriteData(0x7F, &data, 1);      //유저 랭크 0
+  	
+    ReadData(0x3B, &data, 1);
+    usleep(1000);
+
+  	return data;
+}
+
+void ICM_ReadMag(int16_t magn[3]) {
+	uint8_t mag_buffer[10];
+
+	mag_buffer[0] =ICM_Mag_Read(0x01);
+
+	mag_buffer[1] =ICM_Mag_Read(0x11);
+	mag_buffer[2] =ICM_Mag_Read(0x12);
+	magn[0]=mag_buffer[1]|mag_buffer[2]<<8;
+	mag_buffer[3] =ICM_Mag_Read(0x13);
+	mag_buffer[4] =ICM_Mag_Read(0x14);
+	magn[1]=mag_buffer[3]|mag_buffer[4]<<8;
+	mag_buffer[5] =ICM_Mag_Read(0x15);
+	mag_buffer[6] =ICM_Mag_Read(0x16);
+	magn[2]=mag_buffer[5]|mag_buffer[6]<<8;
+
+	i2c_Mag_write(0x31,0x01);
+}
+
+
 void INIT() {
     uint8_t id, data;
+    data = 0x00;
+    WriteData(ICM20948_REG_BANK_SEL, &data, 1);
     ReadData(ICM20948_WHO_AM_I, &id, 1);
     if(id != 0xEA) {
         printf("id: %x\t Different with real ID(0xEA). . .\n", id);
         exit(1);
     }
+    
     data = 0x00;
     WriteData(ICM20948_PWR_MGMT_2, &data, 1);       //자이로 가속도 모두 허용
     WriteData(ICM20948_PWR_MGMT_1, &data, 1);       //Sleep 모드 나오기
+
+    WriteDataReg(0x7F, 0x00); // Select user bank 0
+	WriteDataReg(0x0F, 0x30); // INT Pin / Bypass Enable Configuration
+	WriteDataReg(0x03, 0x20); // I2C_MST_EN
+	WriteDataReg(0x7F, 0x30); // Select user bank 3
+	WriteDataReg(0x01, 0x4D); // I2C Master mode and Speed 400 kHz
+	WriteDataReg(0x02, 0x01); // I2C_SLV0 _DLY_ enable
+	WriteDataReg(0x05, 0x81); // enable IIC	and EXT_SENS_DATA==1 Byte
 }
 
 void sleepmode() {
@@ -213,7 +294,8 @@ void calibrateSensor(Accel_Gyro_Temp *data) {
 int main(int argc, char *argv[]) 
 {
     Accel_Gyro_Temp base;
-    
+    uint8_t data;
+    int16_t magn[3];
 
     if((fd = open(argv[1], O_RDWR)) < 0) {
         printf("Failed to open i2c-0");
@@ -226,6 +308,23 @@ int main(int argc, char *argv[])
     INIT();
     calibrateSensor(&base);
     set_last_read_angle_data(millis(), 0, 0, 0, 0, 0, 0);
+    data = 0x10;
+    WriteData(ICM20948_REG_BANK_SEL, &data, 1);
+    data = 0x00;
+    WriteData(0x01, &data, 1);
+    data = 0x00;
+    WriteData(0x02, &data, 1);
+    ReadData(0x01, &data, 1);
+    printf("GYRO Conf1 : %x\n", data);
+    ReadData(0x02, &data, 1);
+    printf("GYRO Conf2 : %x\n", data);
+    ReadData(0x14, &data, 1);
+    // printf("ACCEL Conf1 : %x\n", data);
+    // ReadData(0x15, &data, 1);
+    // printf("ACCEL Conf2 : %x\n", data);
+
+    data = 0x00;
+    WriteData(ICM20948_REG_BANK_SEL, &data, 1);
 
     while(1) {
         Accel_Gyro_Temp data;
@@ -273,7 +372,10 @@ int main(int argc, char *argv[])
 
         set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
         
-        printf("%lf %lf %lf\n", angleX, angleY, angleZ);
+        ICM_ReadMag(magn);
+        printf("Magnetic X: %d, Y: %d, Z: %d\n", magn[0], magn[1], magn[2]);
+
+        //printf("%lf %lf %lf\n", angleX, angleY, angleZ);
         //printf("%d %d %d\n", data.x_accel, data.y_accel, data.z_accel);
         //printf("%d %d %d\n", data.x_gyro, data.y_gyro, data.z_gyro);
         //printf("Temp: %lf\n", data.temp);
@@ -283,7 +385,7 @@ int main(int argc, char *argv[])
         //printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
         //printf("%lf\n", dt);
 
-        usleep(100000);
+        usleep(1000000);
     }
 
 
