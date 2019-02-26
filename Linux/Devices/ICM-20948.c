@@ -178,16 +178,16 @@ void i2c_Mag_write(uint8_t reg,uint8_t value)
 {
     WriteDataReg(ICM20948_REG_BANK_SEL, 0x30);
 
-  	// usleep(1000);
+  	usleep(1000);
   	WriteDataReg(0x03 ,0x0C);//mode: write
 
-  	// usleep(1000);
+  	usleep(1000);
   	WriteDataReg(0x04 ,reg);//set reg addr
 
-  	// usleep(1000);
+  	usleep(1000);
   	WriteDataReg(0x06 ,value);//send value
 
-  	// usleep(1000);
+  	usleep(1000);
 
     WriteDataReg(ICM20948_REG_BANK_SEL, 0x00);
 }
@@ -197,21 +197,21 @@ uint8_t ICM_Mag_Read(uint8_t reg)
   	uint8_t data;
     
     WriteDataReg(ICM20948_REG_BANK_SEL, USR_BANK_3);
-    // usleep(1000);
+    usleep(1000);
 
     WriteDataReg(0x03, 0x8C);           //I2C Slave0번 주소 read로 설정
-    // usleep(1000);
+    usleep(1000);
 
     WriteDataReg(0x04, reg);            //I2C Slave0번 주소에서 읽으려는 레지스터 설정
-    // usleep(1000);
+    usleep(1000);
 
     WriteDataReg(0x06, 0xFF);           //I2C SLV0 DO
-    // usleep(1000);
+    usleep(1000);
 
     WriteDataReg(ICM20948_REG_BANK_SEL, 0x00);  //유저뱅크 0번
 
     ReadData(ICM20948_EXT_SLV_SENS_DATA_00, &data, 1);           //EXT SLV SENS DATA 0번
-    // usleep(1000);
+    usleep(1000);
 
   	return data;
 }
@@ -366,13 +366,13 @@ int main(int argc, char *argv[])
         double angleY = alpha*gyroAngleY + (1.0 - alpha)*accelAngleY;
         double angleZ = gyroAngleZ;
 
-        set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
-        
         ICM_ReadMag(magn);
 
-        printf("Magnetic X: %d, Y: %d, Z: %d\n", magn[0], magn[1], magn[2]);
-        //printf("Gyro Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", gyroAngleX, gyroAngleY, gyroAngleZ);
-        //printf("Angle: %.2lf %.2lf %.2lf\n", angleX, angleY, angleZ);
+        set_last_read_angle_data(t_now, angleX, angleY, angleZ, unfilteredGyroAngleX, unfilteredGyroAngleY, unfilteredGyroAngleZ);
+
+        printf("Magnetic X: %d, Y: %d, Z: %d\t", magn[0], magn[1], magn[2]);
+        //printf("Gyro Angle X: %.0lf, Y: %.0lf, Z: %.0lf\n", gyroAngleX, gyroAngleY, gyroAngleZ);
+        printf("Angle: %.2lf %.2lf %.2lf\n", angleX, angleY, angleZ);
         //printf("%d %d %d\n", data.x_accel, data.y_accel, data.z_accel);
         //printf("Gyro raw data: %d %d %d\n", data.x_gyro, data.y_gyro, data.z_gyro);
         //printf("Temp: %lf\n", data.temp);
@@ -381,7 +381,7 @@ int main(int argc, char *argv[])
         //printf("Accel: %.2lf, %.2lf, %.2lf\tGyro: %.2lf, %.2lf, %.2lf\n", accelAngleX, accelAngleY, accelAngleZ, gyroAngleX, gyroAngleY, gyroAngleZ);
         //printf("Angle X: %.3lf, Y: %.3lf, Z: %.3lf\n", angleX, angleY, angleZ);
         //printf("%lf\n", dt);
-
+        usleep(10000);
         //usleep(10000);
     }
 
