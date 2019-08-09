@@ -1,4 +1,4 @@
 # Ignore a VScode Environment Setting
-/**/.vscode
+.vscode/
 # Ignore Build Files
-/**/build/
+build/

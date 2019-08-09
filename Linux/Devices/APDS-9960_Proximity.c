@@ -393,7 +393,7 @@ int APDS9960_Init() {
     if(!WriteData(APDS9960_POFFSET_UR, &data, 1)) 
         return 0;
     data = DEFAULT_POFFSET_DL;
-    if(!WriteData(APDS9960_POFFSET_UR, &data, 1)) 
+    if(!WriteData(APDS9960_POFFSET_DL, &data, 1)) 
         return 0;
     data = DEFAULT_CONFIG1;
     if(!WriteData(APDS9960_CONFIG1, &data, 1))

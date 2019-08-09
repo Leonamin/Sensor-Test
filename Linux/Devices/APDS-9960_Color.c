@@ -297,41 +297,41 @@ int APDS9960_Init() {
     if(!APDS9960_setMode(ALL, 0))      //MSB는 Reserved 비트
         return 0;
     data = DEFAULT_ATIME;
-    if(!WriteData(APDS9960_ATIME, &data, 1))
+    if(!WriteData(APDS9960_ATIME, &data, 1))        //ADC 적분 시간
         return 0;
     data = DEFAULT_WTIME;
-    if(!WriteData(APDS9960_WTIME, &data, 1)) 
+    if(!WriteData(APDS9960_WTIME, &data, 1))        //근접 및 ALS 측정 싸이클 사이의 저전력 시간
         return 0;
     data = DEFAULT_PROX_PPULSE;
-    if(!WriteData(APDS9960_PPULSE, &data, 1)) 
+    if(!WriteData(APDS9960_PPULSE, &data, 1))       //근접 펄스 카운트 설정 LDR핀으로 빠져나갈 핀
         return 0;
     data = DEFAULT_POFFSET_UR;
-    if(!WriteData(APDS9960_POFFSET_UR, &data, 1)) 
+    if(!WriteData(APDS9960_POFFSET_UR, &data, 1))   //UR광다이오드 오프셋 설정
         return 0;
     data = DEFAULT_POFFSET_DL;
-    if(!WriteData(APDS9960_POFFSET_UR, &data, 1)) 
+    if(!WriteData(APDS9960_POFFSET_DL, &data, 1))   //DL광다이오드 오프셋 설정
         return 0;
     data = DEFAULT_CONFIG1;
-    if(!WriteData(APDS9960_CONFIG1, &data, 1))
+    if(!WriteData(APDS9960_CONFIG1, &data, 1))      //저전력 시간 길게
         return 0;
     data = DEFAULT_CONFIG2;
-    if(!WriteData(APDS9960_CONFIG2, &data, 1))
+    if(!WriteData(APDS9960_CONFIG2, &data, 1))      //근접/ALS 포화 인터럽트 및 LED 부스트
         return 0;
     data = DEFAULT_CONFIG3;
-    if(!WriteData(APDS9960_CONFIG3, &data, 1))
+    if(!WriteData(APDS9960_CONFIG3, &data, 1))      //SAI 및 근접 게인 비교 활성화하는 레지스터
         return 0;
     data = 0xCF;
     if(!WriteData(APDS9960_CONTROL, &data, 1))     //LED Drive 12.5, P, A Gain 8x, AGAIN_16X
         return 0;
     data = 0xFF;
-    if(!WriteData(APDS9960_AILTL, &data, 1))
+    if(!WriteData(APDS9960_AILTL, &data, 1))        //조도 임계값
         return 0;
     if(!WriteData(APDS9960_AILTH, &data, 1))
         return 0;
     data = 0x00;
     if(!WriteData(APDS9960_AIHTL, &data, 1))
         return 0;
-    if(!WriteData(APDS9960_AIHTH, &data, 1))
+    if(!WriteData(APDS9960_AIHTH, &data, 1)) 
         return 0;
     
     return 1;
